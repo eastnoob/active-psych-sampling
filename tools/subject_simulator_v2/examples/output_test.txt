@@ -1,0 +1,102 @@
+设计空间大小: 1296 个点
+特征数量: 6
+前3个点示例:
+[[0 0 0 0 0 0]
+ [0 0 0 0 0 1]
+ [0 0 0 0 0 2]]
+
+Generating cluster with 5 subjects...
+Output directory: F:\Github\aepsych-source\tools\subject_simulator_v2\examples\output\cluster_example
+  Warning: Subject 1 failed normality check after 20 retries
+           Reason: Mean out of range: 4.18 not in (2.0, 4.0)
+           Using population weights (no deviation)
+  [OK] Subject 1 generated
+  [OK] Subject 2 generated
+  [OK] Subject 3 generated
+  [OK] Subject 4 generated
+  Warning: Subject 5 failed normality check after 20 retries
+           Reason: Mean out of range: 4.19 not in (2.0, 4.0)
+           Using population weights (no deviation)
+  [OK] Subject 5 generated
+
+[OK] Cluster generation completed!
+  Files saved in: F:\Github\aepsych-source\tools\subject_simulator_v2\examples\output\cluster_example
+
+============================================================
+生成结果:
+============================================================
+输出目录: F:\Github\aepsych-source\tools\subject_simulator_v2\examples\output\cluster_example
+
+群体权重:
+[ 0.07450712 -0.02073965  0.09715328  0.22845448 -0.03512301 -0.03512054]
+
+交互效应权重:
+  (3, 4): 0.236882
+  (0, 1): 0.115115
+
+============================================================
+被试响应分布验证:
+============================================================
+
+Subject 1:
+  权重: [ 0.07450712 -0.02073965  0.09715328  0.22845448 -0.03512301 -0.03512054]
+  响应分布:
+    Likert=2: 158 ( 12.2%)
+    Likert=3: 236 ( 18.2%)
+    Likert=4: 400 ( 30.9%)
+    Likert=5: 502 ( 38.7%)
+  均值: 3.96, 标准差: 1.03
+
+Subject 2:
+  权重: [ 0.09509912 -0.09341816  0.06687303  0.18566123  0.03352286 -0.06816134]
+  响应分布:
+    Likert=1:   2 (  0.2%)
+    Likert=2: 211 ( 16.3%)
+    Likert=3: 316 ( 24.4%)
+    Likert=4: 348 ( 26.9%)
+    Likert=5: 419 ( 32.3%)
+  均值: 3.75, 标准差: 1.08
+
+Subject 3:
+  权重: [ 0.01445795  0.08456894  0.19684448  0.10006122 -0.1525745  -0.17232618]
+  响应分布:
+    Likert=1:  52 (  4.0%)
+    Likert=2: 304 ( 23.5%)
+    Likert=3: 317 ( 24.5%)
+    Likert=4: 356 ( 27.5%)
+    Likert=5: 267 ( 20.6%)
+  均值: 3.37, 标准差: 1.16
+
+Subject 4:
+  权重: [ 7.66171048e-02  8.60909381e-05  6.55416374e-02  2.12110406e-01
+ -1.36853619e-01 -2.42870834e-01]
+  响应分布:
+    Likert=1: 149 ( 11.5%)
+    Likert=2: 315 ( 24.3%)
+    Likert=3: 260 ( 20.1%)
+    Likert=4: 292 ( 22.5%)
+    Likert=5: 280 ( 21.6%)
+  均值: 3.18, 标准差: 1.33
+
+Subject 5:
+  权重: [ 0.07450712 -0.02073965  0.09715328  0.22845448 -0.03512301 -0.03512054]
+  响应分布:
+    Likert=2: 158 ( 12.2%)
+    Likert=3: 236 ( 18.2%)
+    Likert=4: 400 ( 30.9%)
+    Likert=5: 502 ( 38.7%)
+  均值: 3.96, 标准差: 1.03
+
+============================================================
+生成的文件:
+============================================================
+  cluster_summary.json     - 集群参数摘要
+  subject_1_spec.json      - 被试1完整参数
+  subject_2_spec.json      - 被试2完整参数
+  ...                      - ...
+  subject_1.csv            - 被试1响应数据
+  subject_2.csv            - 被试2响应数据
+  ...                      - ...
+  combined_results.csv     - 所有被试合并数据
+
+[OK] Example completed!

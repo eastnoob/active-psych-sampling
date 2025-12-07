@@ -1,0 +1,3 @@
+[submodule "extensions/dynamic_eur_acquisition"]
+	path = extensions/dynamic_eur_acquisition
+	url = https://github.com/eastnoob/aepsych-eur-acqf.git

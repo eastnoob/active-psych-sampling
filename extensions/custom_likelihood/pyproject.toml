@@ -1,0 +1,11 @@
+[project]
+name = "aepsych-custom-likelihood"
+version = "0.0.1"
+description = "Custom likelihoods for AEPsych extension"
+authors = [ { name = "AEPsych Contributors" } ]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+
+[tool.poetry.dev-dependencies]
+pytest = "^7.0"

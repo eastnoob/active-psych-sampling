@@ -36,6 +36,7 @@ Phase 1 Step3: Base GP 构建与设计空间扫描 (支持连续型/序数型)
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Dict, Any, Tuple, List, Literal, Union
@@ -544,7 +545,20 @@ def process_step3(
     if subject_col not in df_phase1.columns or response_col not in df_phase1.columns:
         raise ValueError("Phase1 数据缺少必要列")
 
-    factor_cols = [c for c in df_phase1.columns if c not in (subject_col, response_col)]
+    # 智能选择因子列: 仅选择 x1, x2, ... xN 格式的列 (x + 数字开头)
+    all_cols = [c for c in df_phase1.columns if c not in (subject_col, response_col)]
+    factor_cols = [c for c in all_cols if re.match(r'^x\d+', c)]
+
+    if not factor_cols:
+        # 如果没有找到 x1, x2 格式的列，则回退到使用所有非subject/response列
+        print("[警告] 未找到 x1, x2, ... 格式的因子列，使用所有列")
+        factor_cols = all_cols
+    else:
+        excluded_cols = set(all_cols) - set(factor_cols)
+        if excluded_cols:
+            print(f"[信息] 智能过滤: 使用 {len(factor_cols)} 个因子列 (x1, x2, ...)")
+            print(f"[信息] 排除的列: {', '.join(sorted(excluded_cols))}")
+
     factor_df = df_phase1[factor_cols]
     encoded_factors, encodings = _encode_factor_df(factor_df)
     X_train = encoded_factors.values.astype(float)

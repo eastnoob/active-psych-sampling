@@ -67,9 +67,6 @@ ALL_CONFIG = {
     "design_csv": str(
         Path(__file__).parent.parent.parent
         / "data"
-        / "only_independences"
-        / "data"
-        / "only_independences"
         / "i9csy65bljq14ovww2v91-6532622b_JBmIu2QSKA.csv"
     ),
     # Phase 1 预算
@@ -86,7 +83,7 @@ ALL_CONFIG = {
     # Likert输出配置
     "likert_levels": 5,  # Likert量表等级数
     "likert_mode": "tanh",  # tanh=拟真分布 / percentile=均匀分布
-    "likert_sensitivity": 2.0,  # Likert灵敏度 (推荐: 1.5-2.5)
+    "likert_sensitivity": 0.3,  # Likert灵敏度 (修正: 从2.0降至0.3以获得更均衡的分布)
     # 交互效应
     "interaction_pairs": [(3, 4), (0, 1)],  # 指定交互对 (索引从0开始)
     "num_interactions": 0,  # 额外随机生成的交互项数
@@ -403,9 +400,9 @@ def run_step1():
             result = api_run_step1(config)
 
             print("[OK] 采样方案生成成功！")
-            print(f"  文件数: {len(result.exported_files)}")
-            print(f"  保存位置: {result.output_dir}/")
-            print(f"  预算评估: {result.budget_adequacy}")
+            print(f"  文件数: {len(result['files'])}")
+            print(f"  保存位置: {result['output_dir']}/")
+            print(f"  预算评估: {result['adequacy']}")
             print()
             print("=" * 80)
             print("下一步：")
@@ -675,8 +672,8 @@ def run_step3():
             result = api_run_step3(config)
 
             print("[OK] Base GP 训练与扫描完成")
-            print(f"  输出目录: {result.output_dir}")
-            print(f"  设计空间点数: {result.n_design_points}")
+            print(f"  输出目录: {result['result']['output_dir']}")
+            print(f"  设计空间点数: {result['result']['n_design_points']}")
             print("  关键点: 保存于 base_gp_key_points.json")
             print("  长度尺度: base_gp_lengthscales.json")
             print("  报告: base_gp_report.md")

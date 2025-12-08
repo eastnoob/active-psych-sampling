@@ -1,0 +1,11 @@
+x1_CeilingHeight,x2_GridModule,x3_OuterFurniture,x4_VisualBoundary,x5_PhysicalBoundary,x6_InnerFurniture,subject_1,subject_2,subject_3,subject_4,subject_5
+2.8,6.5,Strict,Solid,Closed,Strict,3.0,2.0,3.0,2.0,4.0
+2.8,6.5,Strict,Solid,Closed,Rotated,3.0,2.0,4.0,2.0,4.0
+2.8,6.5,Strict,Solid,Closed,Chaos,3.0,2.0,4.0,3.0,4.0
+2.8,6.5,Strict,Solid,Open,Strict,3.0,2.0,3.0,2.0,4.0
+2.8,6.5,Strict,Solid,Open,Rotated,3.0,2.0,3.0,2.0,4.0
+2.8,6.5,Strict,Solid,Open,Chaos,3.0,2.0,4.0,3.0,4.0
+2.8,6.5,Strict,Translucent,Closed,Strict,3.0,2.0,3.0,2.0,4.0
+2.8,6.5,Strict,Translucent,Closed,Rotated,3.0,2.0,3.0,2.0,4.0
+2.8,6.5,Strict,Translucent,Closed,Chaos,3.0,2.0,4.0,3.0,4.0
+2.8,6.5,Strict,Translucent,Open,Strict,3.0,2.0,3.0,2.0,4.0

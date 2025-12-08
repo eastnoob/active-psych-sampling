@@ -1,0 +1,18 @@
+{
+  "factor_names": [
+    "x1_CeilingHeight",
+    "x2_GridModule",
+    "x3_OuterFurniture",
+    "x4_VisualBoundary",
+    "x5_PhysicalBoundary",
+    "x6_InnerFurniture"
+  ],
+  "lengthscales": [
+    5.4817609786987305,
+    4.341372966766357,
+    2.3666865825653076,
+    1.2976328134536743,
+    3.647883653640747,
+    3.3650834560394287
+  ]
+}

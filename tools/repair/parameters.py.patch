@@ -1,0 +1,27 @@
+"""
+修复补丁：ParameterTransformedModel.train_inputs 遮蔽 Bug
+
+这个补丁修复了 aepsych 中 ParameterTransformedModel 的 train_inputs 属性遮蔽问题。
+
+【应用方法】
+
+将下面的代码插入到文件：
+    .pixi/envs/default/Lib/site-packages/aepsych/transforms/parameters.py
+
+位置：在 `def fit(self, train_x: torch.Tensor, train_y: torch.Tensor, **kwargs) -> None:` 方法之前
+      （大约在第 724 行，`return self._base_obj.posterior(X=X, **kwargs)` 之后）
+
+【要插入的代码】
+"""
+
+# ========== Fix for _train_inputs shadowing bug ==========
+@property
+def train_inputs(self) -> tuple[torch.Tensor, ...] | None:
+    """Delegate train_inputs to the underlying model."""
+    return self._base_obj.train_inputs
+
+@train_inputs.setter
+def train_inputs(self, value: tuple[torch.Tensor, ...] | None) -> None:
+    """Delegate train_inputs setting to the underlying model."""
+    self._base_obj.train_inputs = value
+# ========== End of fix ==========

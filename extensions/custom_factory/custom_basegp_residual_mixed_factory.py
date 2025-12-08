@@ -323,6 +323,8 @@ class CustomBaseGPResidualMixedFactory(MeanCovarFactory, ConfigurableMixin):
         """从 Config 对象获取初始化参数"""
         import ast
 
+        print(f"[DEBUG] get_config_args called with name={name}")
+
         # 获取维度
         dim = config.getint("common", "n_params", fallback=None)
         if dim is None:
@@ -335,10 +337,12 @@ class CustomBaseGPResidualMixedFactory(MeanCovarFactory, ConfigurableMixin):
 
         # 解析连续参数
         continuous_params_str = config.get(name, "continuous_params", fallback=None)
+        print(f"[DEBUG] continuous_params_str = {continuous_params_str}")
         continuous_params = ast.literal_eval(continuous_params_str) if continuous_params_str else []
 
         # 解析离散参数
         discrete_params_str = config.get(name, "discrete_params", fallback=None)
+        print(f"[DEBUG] discrete_params_str = {discrete_params_str}")
         discrete_params = ast.literal_eval(discrete_params_str) if discrete_params_str else {}
 
         # 解析 ls_loc 和 ls_scale（仅连续参数）
@@ -361,3 +365,16 @@ class CustomBaseGPResidualMixedFactory(MeanCovarFactory, ConfigurableMixin):
             "outputscale_prior": config.get(name, "outputscale_prior", fallback="gamma"),
             "stimuli_per_trial": config.getint("common", "stimuli_per_trial", fallback=1),
         }
+
+    @classmethod
+    def get_config_options(cls, config, name=None, options=None):
+        """Override ConfigurableMixin.get_config_options to use our custom parser.
+
+        AEPsych's from_config calls get_config_options, which by default uses
+        Config.get*() methods that can't parse complex types like dicts.
+        We override this to use our get_config_args which properly parses discrete_params.
+        """
+        # If name is not provided, use the class name
+        if name is None:
+            name = cls.__name__
+        return cls.get_config_args(config, name)

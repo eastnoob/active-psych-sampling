@@ -1,410 +1,206 @@
 # 02 Phase 2 - BaseGP 先验集成
 
-**目标**: 使用 Phase 1 训练的 BaseGP 作为先验,进行残差学习 (Residual Learning)
+**目标**: 残差学习 - 新 GP 学习 `y - BaseGP_mean(x)`,用少量数据(~30点)快速学习个体差异
 
 ---
 
-## 核心概念
+## BaseGP 输出文件
 
-**残差学习**: 新 GP 只学习 `y - BaseGP_mean(x)`,利用 BaseGP 的群体知识,用少量数据(如30点)快速学习个体差异。
+从 `extensions/warmup_budget_check/phase1_analysis_output/{timestamp}/step3/`:
 
----
-
-## 必需的 BaseGP 产出
-
-从 `extensions/warmup_budget_check/phase1_analysis_output/{timestamp}/step3/` 获取:
-
-| 文件 | 必需? | 用途 | 使用位置 |
-|------|------|------|---------|
-| `base_gp_key_points.json` | ✅ 必需 | 3个黄金初始化点 (best/worst/max_std) | `run_*.py` → `initialize_server()` |
-| `design_space_scan.csv` | ✅ 必需 | 设计空间的 BaseGP 预测 (先验均值) | `*.ini` → `[Factory]` → `basegp_scan_csv` |
-| `base_gp_lengthscales.json` | 📋 参考 | 因子敏感性排序 | 调整 `ard_weights` / `interaction_pairs` |
-| `base_gp_encodings.json` | ⚠️ 重要 | 类别变量编码映射 | 确保 INI 配置的类别顺序一致 |
-| `base_gp_subject_stats.json` | 📋 参考 | 被试间变异性统计 | 理解数据结构 |
+| 文件 | 必需? | 用途 | 配置位置 |
+|------|------|------|----------|
+| `base_gp_key_points.json` | ✅ | 3黄金点 (best/worst/max_std) | `run_*.py` → `basegp_keypoints_path` <br> `*.ini` → `[ManualGenerator]` → `points` |
+| `design_space_scan.csv` | ✅ | 设计空间先验均值 | `*.ini` → `[Factory]` → `basegp_scan_csv` |
+| `base_gp_lengthscales.json` | 📋 | 因子敏感性排序 | `*.ini` → `[Acqf]` → `ard_weights`, `interaction_pairs` |
+| `base_gp_encodings.json` | ⚠️ | 类别变量编码 | 验证 INI 类别顺序一致 |
+| `base_gp_report.md` | 📋 | 训练摘要 (noise等) | `*.ini` → `[Likelihood]` → `noise_init` |
 
 ---
 
-## 配置示例
+## ⚙️ 配置验证与对齐检查
 
-### 1. Python 脚本配置
+### 必查项 (切换新 BaseGP 时)
+
+| 检查项 | BaseGP 来源 | EUR 配置目标 | 验证方法 |
+|--------|------------|--------------|----------|
+| **黄金初始化点** | `base_gp_key_points.json` | `*.ini` → `[ManualGenerator]` → `points` | 坐标完全一致 (含x1~x6顺序) |
+| **先验均值路径** | `design_space_scan.csv` | `*.ini` → `[Factory]` → `basegp_scan_csv` | 路径存在且有 `pred_mean` 列 |
+| **ARD 权重** | `base_gp_lengthscales.json` | `*.ini` → `[Acqf]` → `ard_weights` | `normalize(1/lengthscales)` |
+| **交互对筛选** | `base_gp_lengthscales.json` | `*.ini` → `[Acqf]` → `interaction_pairs` | 避免两低敏感因子组合 |
+| **Gamma 参数** | `design_space_scan.csv` | `*.ini` → `[Acqf]` → `gamma_min/max` | 基于不确定性调整 |
+| **预算对齐** | 脚本 `budget` | `*.ini` → `[Acqf]` → `total_budget`, `tau_n_max` | `tau_n_max < actual_budget` |
+
+### 常见对齐错误
+
+| ❌ 错误 | ✅ 正确 | 影响 |
+|---------|---------|------|
+| 黄金点坐标 `[2.8, 8.0, 2, 1, 0, 1]` | `[2.8, 6.5, 2, 2, 0, 0]` (从 JSON 提取) | Warmup 初始化错误,降低效率 |
+| `ard_weights = [均匀分布]` | `[0.084, 0.106, 0.194, 0.354, ...]` | 忽略因子敏感性,探索低效 |
+| `gamma_min = 0.06` (无 BaseGP) | `0.10` (残差 BaseGP) | 探索不足,漏检效应 |
+| `tau_n_max = 70` | `< actual_budget` (如 24) | Gamma 衰减失效 |
+| 交互对含 `(4,5)` (x5*x6) | 过滤低敏感组合 | 浪费预算探索无用交互 |
+
+### 验证脚本示例
 
 ```python
-# 文件: run_eur_residual.py
-basegp_keypoints_path = (
-    PROJECT_ROOT / "extensions/warmup_budget_check/phase1_analysis_output"
-    / "202512072040/step3/base_gp_key_points.json"
-)
-```
+# 验证黄金点对齐
+import json
+with open('phase1_analysis_output/{timestamp}/step3/base_gp_key_points.json') as f:
+    keypoints = json.load(f)
 
-### 2. INI 配置
-
-```ini
-# 文件: eur_config_residual.ini
-[CustomBaseGPResidualMixedFactory]
-basegp_scan_csv = extensions/warmup_budget_check/phase1_analysis_output/202512072040/step3/design_space_scan.csv
-mean_type = pure_residual
-
-[ConfigurableGaussianLikelihood]
-# 噪声先验 (可选,从 BaseGP 训练日志提取最终 noise 值)
-noise_prior_concentration = 2.0
-noise_prior_rate = 1.228
-noise_init = 0.814  # 或使用新 BaseGP 的收敛值 (如 0.284)
+expected = [
+    list(keypoints['x_best_prior'].values()),
+    list(keypoints['x_worst_prior'].values()),
+    list(keypoints['x_max_std'].values())
+]
+print("INI [ManualGenerator] points 应该是:")
+for p in expected:
+    print(f"  {p}")
 ```
 
 ---
 
-## design_space_scan.csv 格式
+## CSV 格式要求
 
-**列名要求**: 自动检测 `x\d+` 模式 (如 `x1_*`, `x2_*`),**必须包含** `pred_mean`
+**`design_space_scan.csv`** 必须包含 `pred_mean` 列,特征列自动检测 `x\d+` 模式:
 
 ```csv
-x1_CeilingHeight,x2_GridModule,x3_OuterFurniture,...,pred_mean,pred_std
-2.8,6.5,2,...,0.99,0.55
-4.0,8.0,1,...,1.80,0.56
+x1_CeilingHeight,x2_GridModule,...,pred_mean,pred_std
+2.8,6.5,...,0.99,0.55
 ```
 
-**兼容性**:
+✅ 支持任意后缀 (`x1_binary`, `x1_CeilingHeight`)
+✅ 忽略 `Condition_ID` 列
+✅ 自适应特征数量
 
-- ✅ 任意 `x1_*`, `x2_*` 后缀 (如 `x1_binary`, `x1_CeilingHeight`)
-- ✅ 可含 `Condition_ID` 列(会被自动忽略)
-- ✅ 特征数量自适应 (自动检测)
-
----
-
-## 代码实现
-
-**自动列名检测** ([custom_basegp_prior_mean.py](../extensions/custom_mean/custom_basegp_prior_mean.py)):
-
+**代码实现** ([custom_basegp_prior_mean.py](../extensions/custom_mean/custom_basegp_prior_mean.py)):
 ```python
 import re
-feature_cols = sorted(
-    [col for col in df.columns if re.match(r'^x\d+', col)],
-    key=lambda x: int(re.match(r'^x(\d+)', x).group(1))
-)
-```
-
-**特点**:
-
-- 按数字排序 (避免 x10 排在 x2 前面)
-- 无需硬编码列名
-- 向后兼容旧格式
-
----
-
-## 更新 BaseGP 检查清单
-
-切换到新 BaseGP 时:
-
-- [ ] 更新 `run_*.py` 中的 `basegp_keypoints_path`
-- [ ] 更新 `*.ini` 中的 `basegp_scan_csv`
-- [ ] 验证新 CSV 包含 `pred_mean` 列
-- [ ] 验证 `base_gp_encodings.json` 与 INI 的类别顺序一致
-- [ ] (可选) 从 `base_gp_report.md` 提取最终 noise 值更新 `noise_init`
-- [ ] (可选) 基于 `base_gp_lengthscales.json` 调整 `ard_weights`
-- [ ] (可选) 优化 `interaction_pairs` (避免低敏感因子组合)
-
----
-
-## EUR 采集函数配置 (基于 BaseGP 系统性优化)
-
-### 1️⃣ ARD 权重计算公式
-
-**目标**: 根据 BaseGP lengthscales 分配探索优先级
-
-**公式**:
-```python
-# 从 base_gp_lengthscales.json 读取
-lengthscales = [l1, l2, ..., ln]
-
-# 反向加权 (lengthscale 越小 → 敏感性越高 → 权重越大)
-raw_weights = [1/l for l in lengthscales]
-
-# 归一化到 [0, 1]
-ard_weights = [w / sum(raw_weights) for w in raw_weights]
-```
-
-**实例** (当前 BaseGP):
-```
-Lengthscales: [0.749, 0.960, 0.134, 0.860, 5.004, 4.336]
-Raw weights:  [1.34,  1.04,  7.46,  1.16,  0.20,  0.23 ]
-Normalized:   [0.20,  0.15,  0.35,  0.18,  0.02,  0.10 ]
-```
-
-**阈值判断**:
-- `lengthscale < 1.0`: 高敏感 (权重 > 0.15)
-- `1.0 ≤ lengthscale < 3.0`: 中等 (权重 0.05-0.15)
-- `lengthscale ≥ 4.0`: 低敏感 (权重 < 0.05, 考虑忽略)
-
----
-
-### 2️⃣ Lambda_max 计算逻辑
-
-**目标**: 根据主效应强度决定交互探索上限
-
-**诊断指标**:
-```python
-# 从 base_gp_lengthscales.json 计算
-lengthscales_sorted = sorted(lengthscales)
-
-# 主效应信号强度 (最敏感因子的相对敏感度)
-main_effect_strength = lengthscales_sorted[-1] / lengthscales_sorted[0]
-
-# 示例: 5.004 / 0.134 = 37.3 (主效应极强)
-```
-
-**Lambda_max 调整公式**:
-```python
-# Phase 1 推荐值 (baseline)
-lambda_baseline = phase1_phase2_config["lambda_max"]
-
-# 修正系数 (主效应越强 → lambda 越低)
-if main_effect_strength > 20:
-    lambda_max = lambda_baseline * 1.2   # 主效应极强,适度提升交互探索
-elif main_effect_strength > 10:
-    lambda_max = lambda_baseline * 1.5
-elif main_effect_strength > 5:
-    lambda_max = lambda_baseline * 1.8
-else:
-    lambda_max = lambda_baseline * 2.0   # 主效应弱,优先探索交互
-
-# 示例: 0.50 * 1.2 = 0.6
-```
-
-**经验阈值**:
-- BaseGP 主效应强 (`ratio > 20`) → `lambda_max ∈ [0.5, 0.7]`
-- BaseGP 主效应中等 (`ratio 5-20`) → `lambda_max ∈ [0.7, 1.0]`
-- BaseGP 主效应弱 (`ratio < 5`) → `lambda_max ∈ [1.0, 1.5]`
-
----
-
-### 3️⃣ Gamma_min 计算逻辑
-
-**目标**: 根据 BaseGP 不确定性决定最终探索需求
-
-**诊断指标**:
-```python
-# 从 design_space_scan.csv 计算
-pred_std_mean = df["pred_std"].mean()
-pred_std_cv = df["pred_std"].std() / pred_std_mean
-
-# 示例: mean=0.56, cv=0.02 (不确定性均匀且稳定)
-```
-
-**Gamma_min 调整公式**:
-```python
-# Phase 1 推荐值
-gamma_baseline = phase1_phase2_config["gamma_end"]
-
-# 修正系数 (不确定性越低 → 探索需求越小)
-if pred_std_cv < 0.05 and pred_std_mean < 0.6:
-    gamma_min = gamma_baseline * 1.3   # 先验强,减少探索
-elif pred_std_cv < 0.10:
-    gamma_min = gamma_baseline * 1.1
-else:
-    gamma_min = gamma_baseline * 1.0   # 先验弱,保持探索
-
-# 示例: 0.06 * 1.3 ≈ 0.08
-```
-
-**经验阈值**:
-- BaseGP 不确定性低 (`std_mean < 0.6, cv < 0.05`) → `gamma_min ∈ [0.08, 0.10]`
-- BaseGP 不确定性中等 → `gamma_min ∈ [0.10, 0.15]`
-- BaseGP 不确定性高 (`std_mean > 1.0`) → `gamma_min ∈ [0.15, 0.20]`
-
----
-
-### 4️⃣ Interaction_pairs 筛选算法
-
-**目标**: 选择最有价值的交互对,避免无效组合
-
-**算法**:
-```python
-# Step 1: 计算所有可能交互对的"潜在价值"
-scores = {}
-for i in range(n):
-    for j in range(i+1, n):
-        # 价值 = 两因子敏感度的调和平均 (避免一高一低的组合)
-        harmonic_mean = 2 / (lengthscales[i] + lengthscales[j])
-        scores[(i,j)] = harmonic_mean
-
-# Step 2: 过滤低敏感因子组合
-# 规则: 两因子中至少一个 lengthscale < 2.0
-valid_pairs = [
-    (i,j) for (i,j), score in scores.items()
-    if min(lengthscales[i], lengthscales[j]) < 2.0
-]
-
-# Step 3: 排序并选择 Top-K
-top_k_pairs = sorted(valid_pairs, key=lambda p: scores[p], reverse=True)[:3]
-
-# Phase 1 推荐优先 (如果在 valid_pairs 中)
-phase1_pairs = phase1_phase2_config["interaction_pairs"]
-final_pairs = phase1_pairs + [p for p in top_k_pairs if p not in phase1_pairs]
-```
-
-**实例** (当前 BaseGP):
-```
-候选对:
-  (2,3): 2/(0.134+0.860) = 2.01  ← 最高 (x3*x4)
-  (0,2): 2/(0.749+0.134) = 2.27  ← 次高 (x1*x3)
-  (0,1): 2/(0.749+0.960) = 1.17  ← Phase 1 推荐
-  (2,3): Phase 1 推荐 ✓
-  (4,5): 2/(5.004+4.336) = 0.21  ✗ 过滤 (两因子均不敏感)
-
-最终: 2,3; 0,1; 0,2  (或 2,3; 0,1; 1,3)
-```
-
-**过滤规则**:
-- ❌ 两因子 lengthscales 均 > 3.0
-- ❌ 调和平均 < 0.5 (潜在价值过低)
-- ✅ 优先保留 Phase 1 推荐的交互对
-
----
-
-### 5️⃣ Tau_n 预算对齐公式
-
-**目标**: Gamma 衰减区间必须匹配实际 EUR 预算
-
-**公式**:
-```python
-# 实际 EUR 预算 (扣除 warmup)
-actual_budget = total_budget - n_warmup_points
-
-# Gamma 开始衰减点 (30% 进度)
-tau_n_min = int(actual_budget * 0.3)
-
-# Gamma 完全衰减点 (80-90% 进度)
-tau_n_max = int(actual_budget * 0.85)
-
-# 示例: budget=30, warmup=3 → actual=27
-# tau_n_min = 27 * 0.3 = 8
-# tau_n_max = 27 * 0.85 = 23
-```
-
-**关键检查**:
-- ⚠️ `tau_n_max > actual_budget` → 衰减逻辑失效!
-- ✅ `tau_n_min < tau_n_max < actual_budget`
-
----
-
-### 6️⃣ 噪声先验更新 (可选)
-
-**目标**: 使用 BaseGP 收敛噪声值作为 Phase 2 初始化
-
-**提取方法**:
-```python
-# 从 base_gp_report.md 提取最终训练噪声
-final_noise = 0.284  # 示例: Iter 200, Noise = 2.836e-01
-
-# Gamma 先验参数 (匹配 noise 均值和方差)
-# 假设 noise ~ Gamma(concentration, rate)
-# E[noise] = concentration / rate = final_noise
-# Var[noise] = concentration / rate^2 (控制先验强度)
-
-# 经验配置 (中等先验强度)
-noise_init = final_noise
-noise_prior_concentration = 2.0
-noise_prior_rate = noise_prior_concentration / final_noise
-
-# 示例: rate = 2.0 / 0.284 = 7.04
+feature_cols = sorted([col for col in df.columns if re.match(r'^x\d+', col)],
+                      key=lambda x: int(re.match(r'^x(\d+)', x).group(1)))
 ```
 
 ---
 
-### 📋 完整配置示例
+## EUR 参数计算 (基于 BaseGP)
+
+| 参数 | 公式 | 数据来源 | 经验阈值 |
+|------|------|----------|----------|
+| **ARD 权重** | `normalize([1/l for l in lengthscales])` | `base_gp_lengthscales.json` | 高敏感(l<1.0): w>0.15 <br> 中等(1-3): w=0.05-0.15 <br> 低敏感(l>4): w<0.05 |
+| **Lambda_max** | `baseline * factor` <br> factor = 1.2 (ratio>20) <br> factor = 1.5 (ratio 10-20) <br> factor = 1.8 (ratio 5-10) <br> factor = 2.0 (ratio<5) | `lengthscales_sorted[-1] / [0]` | 主效应强: 0.5-0.7 <br> 中等: 0.7-1.0 <br> 弱: 1.0-1.5 |
+| **Gamma_min** | `baseline * factor` <br> factor = 1.3 (cv<0.05, mean<0.6) <br> factor = 1.1 (cv<0.10) <br> factor = 1.0 (其他) | `design_space_scan.csv` <br> `pred_std` 均值/变异系数 | 不确定性低: 0.08-0.10 <br> 中等: 0.10-0.15 <br> 高: 0.15-0.20 |
+| **Interaction_pairs** | 调和平均 Top-K: <br> `score = 2/(l[i]+l[j])` <br> 过滤: `min(l[i],l[j]) < 2.0` | `base_gp_lengthscales.json` | ❌ 均 > 3.0 <br> ❌ score < 0.5 <br> ✅ Phase 1 推荐优先 |
+| **Tau_n** | `tau_n_min = actual_budget * 0.3` <br> `tau_n_max = actual_budget * 0.85` <br> `actual_budget = total - warmup` | 脚本 `budget` 参数 | ⚠️ 确保 `tau_n_max < actual_budget` |
+| **Noise 先验** | `noise_init = final_noise` <br> `rate = concentration / final_noise` | `base_gp_report.md` <br> 最终训练噪声 | 中等先验: concentration=2.0 |
+
+### 计算示例 (202512081445 BaseGP)
+
+```python
+# ARD 权重
+lengthscales = [5.482, 4.341, 2.367, 1.298, 3.648, 3.365]
+raw = [1/l for l in lengthscales]  # [0.182, 0.230, 0.422, 0.770, 0.274, 0.297]
+ard_weights = [w/sum(raw) for w in raw]  # [0.084, 0.106, 0.194, 0.354, 0.126, 0.137]
+
+# Lambda_max
+ratio = 5.482 / 1.298 = 4.22  # 主效应弱
+lambda_max = 0.50 * 2.0 = 1.0
+
+# Gamma_min
+pred_std_mean = 0.56, cv = 0.02  # 不确定性低
+gamma_min = 0.06 * 1.3 = 0.08
+
+# Interaction_pairs
+scores = {(3,2): 2.01, (0,3): 1.53, (0,1): 1.02, (4,5): 0.21}
+valid = [(3,2), (0,3), (0,1)]  # 过滤 (4,5)
+
+# Tau_n
+actual_budget = 30 - 3 = 27
+tau_n_min = 27 * 0.3 = 8
+tau_n_max = 27 * 0.85 = 23
+```
+
+### 完整 INI 配置
 
 ```ini
 [EURAnovaMultiAcqf]
-# 交互对: 调和平均 Top-3 (过滤 lengthscale>3 的组合)
-interaction_pairs = 2,3; 0,1; 1,3
-
-# Lambda: baseline * correction_factor
+interaction_pairs = 3,2; 0,1; 0,3
 lambda_min = 0.1
-lambda_max = 0.6        # 0.50 * 1.2 (主效应强,ratio=37.3)
-tau1 = 0.7
-
-# Gamma: baseline * uncertainty_factor
+lambda_max = 1.0
 gamma = 0.30
-gamma_max = 0.40
-gamma_min = 0.08        # 0.06 * 1.3 (不确定性低,cv=0.02)
-tau_n_min = 8           # 27 * 0.30
-tau_n_max = 24          # 27 * 0.85
+gamma_min = 0.08
+tau_n_min = 8
+tau_n_max = 23
 total_budget = 30
+ard_weights = [0.084, 0.106, 0.194, 0.354, 0.126, 0.137]
 
-# ARD: 归一化 1/lengthscale
-ard_weights = [0.20, 0.15, 0.35, 0.18, 0.02, 0.10]
-```
-
-```ini
 [ConfigurableGaussianLikelihood]
+noise_init = 0.568  # 从 base_gp_report.md
 noise_prior_concentration = 2.0
-noise_prior_rate = 7.04             # 2.0 / 0.284
-noise_init = 0.284                  # 从 BaseGP 最终噪声提取
+noise_prior_rate = 3.52  # 2.0 / 0.568
 ```
 
 ---
 
-### ⚠️ 常见误区
+## Phase 1 Step2 产出 (可选参考)
 
-| 错误做法 | 正确做法 |
-|---------|---------|
-| `ard_weights` 全设为均匀 | 必须基于 lengthscales 反向加权 |
-| `lambda_max = 1.0` (固定值) | 根据主效应强度动态调整 |
-| `total_budget = 100` (与脚本不一致) | 必须匹配实际 EUR 预算 |
-| 包含 x5*x6 交互对 | 过滤两个低敏感因子的组合 |
-| `tau_n_max = 70` (超出预算) | 确保 `tau_n_max < actual_budget` |
+从 `extensions/warmup_budget_check/phase1_analysis_output/{timestamp}/step2/`:
+
+- `phase1_phase2_config.json`: 交互对推荐、λ/γ baseline、预算建议
+- `phase1_analysis_report.txt`: 主效应和交互效应分析
+
+⚠️ Step2 推荐需结合 Step3 BaseGP lengthscales 调整
 
 ---
 
-## Phase 2 分析产出 (Step2)
+## 快速问答
 
-从 `extensions/warmup_budget_check/phase1_analysis_output/{timestamp}/step2/` 获取:
-
-| 文件 | 用途 |
+| 问题 | 答案 |
 |------|------|
-| `phase1_phase2_config.json` | Phase 2 推荐参数 (λ, γ, 交互对, 预算) |
-| `phase1_analysis_report.txt` | 主效应和交互效应分析报告 |
-
-**关键参数**:
-- `interaction_pairs`: 筛选出的显著交互对
-- `lambda_max`: 交互权重上限
-- `gamma_init`: 探索覆盖初始权重
-- `phase2_n_subjects`, `phase2_trials_per_subject`: 推荐预算
+| CSV 列名不匹配? | 升级到 2024-12-07 后版本 (自动检测 `x\d+`) |
+| 需要转换参数空间? | 否,默认 BaseGP 与 Phase 2 同编码 |
+| 多个 BaseGP 版本如何选? | 对比 `base_gp_report.md` 训练 loss,选收敛好的 |
+| 黄金点从哪来? | `base_gp_key_points.json` → `[ManualGenerator]` → `points` |
+| ARD 权重怎么算? | `normalize([1/l for l in lengthscales])` |
+| Gamma 参数调整依据? | `design_space_scan.csv` 的 `pred_std` 均值和变异系数 |
 
 ---
 
-## BaseGP 敏感性参考
+## ⚠️ 开发陷阱提醒
 
-**用途**: 指导 `interaction_pairs` 和 `ard_weights` 配置
+### 评估时的数据来源
 
-从 `base_gp_lengthscales.json` 提取:
+在 BaseGP 残差学习场景下，进行效应恢复评估时需要注意数据来源一致性：
 
-```json
-{
-  "x3_OuterFurniture": 0.134,    // 最敏感 ← 优先探索
-  "x1_CeilingHeight": 0.749,     // 高敏感
-  "x4_VisualBoundary": 0.860,    // 中等
-  "x2_GridModule": 0.960,        // 中等
-  "x5_PhysicalBoundary": 5.004,  // 最不敏感 ← 低优先级
-  "x6_InnerFurniture": 4.336     // 不敏感
-}
+| 数据来源 | 包含范围 | 适用场景 |
+|---------|---------|----------|
+| `model.train_inputs[0]` | 仅最近 warmup 数据 (如3个黄金点) | ❌ 不适合完整训练历史评估 |
+| `model.train_targets` | 仅最近 warmup 数据 | ❌ 不适合完整训练历史评估 |
+| `logs["x_points"]` | warmup + EUR 采样点 (完整历史) | ✅ 效应恢复评估 |
+| `logs["y_values"]` | warmup + EUR 采样点 (完整历史) | ✅ 效应恢复评估 |
+
+**常见错误**：
+```python
+# ❌ 错误：混用不同数据源导致维度不匹配
+train_X = model.train_inputs[0].cpu().numpy()  # 形状: (3, 6) - 仅 warmup
+train_y = np.array(logs["y_values"])          # 形状: (10,) - 完整历史
+# ValueError: Found input variables with inconsistent numbers of samples: [3, 10]
 ```
 
-**规律**: lengthscale 越小 → 越敏感 → 越值得探索
+**正确做法**：
+```python
+# ✅ 正确：统一使用 logs 获取完整训练历史
+train_X = np.array(logs["x_points"])   # 形状: (10, 6) - 完整历史
+train_y = np.array(logs["y_values"])   # 形状: (10,) - 完整历史
+# 维度一致: [10, 10]
+```
+
+**原因**：在残差学习中，`model.train_targets` 只保存最近的 warmup 数据（如3个黄金点），而不包含后续 EUR 采样点。完整的训练历史存储在采样循环返回的 `logs` 字典中。
+
+**参考实现**：
+- [evaluation_v2.py](../tests/is_EUR_work/00_plans/251206/scripts/modules/evaluation_v2.py#L96-L107) - 正确的数据获取方式
+- [run_eur_residual.py](../tests/is_EUR_work/00_plans/251206/scripts/run_eur_residual.py#L380-L387) - 传递 logs 参数
 
 ---
 
-## 常见问题
-
-**Q: 列名不匹配报错?**
-A: 升级代码到支持自动检测的版本 (2024-12-07 之后)
-
-**Q: 是否需要转换参数空间?**
-A: 不需要,默认假设 BaseGP 与 Phase 2 使用相同编码
-
-**Q: 多个 BaseGP 版本如何选择?**
-A: 对比 `base_gp_report.md` 中的训练损失和预测范围,选择收敛更好的
-
----
-
-**相关文档**: [01_WARMUP_BUDGET.md](./01_WARMUP_BUDGET.md) (假设存在)
+**相关文档**: [02_INI_CONFIG_PITFALLS.md](./02_INI_CONFIG_PITFALLS.md)

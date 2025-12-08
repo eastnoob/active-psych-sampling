@@ -2,6 +2,11 @@ import json
 from pathlib import Path
 import tempfile
 import pandas as pd
+import sys
+
+# Ensure project root is on sys.path for imports
+project_root = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(project_root))
 
 from extensions.warmup_budget_check.core.phase1_step3_base_gp_v2 import (
     process_step3,

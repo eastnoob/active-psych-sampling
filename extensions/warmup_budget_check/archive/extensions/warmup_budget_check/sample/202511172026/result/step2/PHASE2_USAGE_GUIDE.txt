@@ -1,0 +1,96 @@
+================================================================================
+Phase 2 参数使用指南
+================================================================================
+
+本指南说明如何在EUR-ANOVA主动学习中使用Phase 1分析结果
+
+1. 加载Phase 2配置
+--------------------------------------------------------------------------------
+```python
+import numpy as np
+import json
+
+# 加载JSON配置
+with open('phase1_phase2_config.json') as f:
+    config = json.load(f)
+
+# 加载动态调度
+data = np.load('phase1_phase2_schedules.npz')
+lambda_schedule = data['lambda_schedule']  # (n_trials, 2)
+gamma_schedule = data['gamma_schedule']    # (n_trials, 2)
+interaction_pairs = data['interaction_pairs'].tolist()
+```
+
+2. 初始化EUR-ANOVA采集函数
+--------------------------------------------------------------------------------
+```python
+from eur_anova_pair import EURAnovaPairAcqf
+
+# 交互对列表（从Phase 1筛选）
+interaction_pairs = [(3, 4), (0, 1), (1, 3)]
+
+# 初始化采集函数
+acqf = EURAnovaPairAcqf(
+    model=your_gp_model,
+    gamma=0.300,  # γ初始值
+    lambda_min=0.1,
+    lambda_max=1.0,
+    interaction_pairs=interaction_pairs,  # 从Phase 1
+    tau1=0.7,
+    tau2=0.3,
+    tau_n_max=450,
+    gamma_min=0.060
+)
+```
+
+3. Phase 2主动学习循环
+--------------------------------------------------------------------------------
+```python
+for trial in range(1, 450 + 1):
+    # 获取当前λ和γ
+    lambda_t = lambda_schedule[trial - 1, 1]
+    gamma_t = gamma_schedule[trial - 1, 1]
+
+    # 更新采集函数参数（如果需要）
+    # acqf.gamma = gamma_t
+
+    # EUR-ANOVA采集
+    scores = acqf(X_candidates)
+    next_idx = scores.argmax()
+    X_next = X_candidates[next_idx]
+
+    # 执行实验
+    y_next = conduct_experiment(X_next)
+
+    # 更新GP模型
+    your_gp_model.update(X_next, y_next)
+
+    # 中期诊断
+    if trial == 301:
+        run_mid_phase_diagnostic()
+```
+
+4. 参数说明
+--------------------------------------------------------------------------------
+interaction_pairs: 3个交互对
+  [(3, 4), (0, 1), (1, 3)]
+
+lambda_init: 0.240
+  控制交互效应探索的权重
+  λ越大，越关注交互；λ越小，越关注主效应
+
+gamma_init: 0.300
+  控制覆盖性（exploration）的权重
+  γ越大，越关注未探索区域；γ越小，越关注精化已知区域
+
+衰减策略: 指数衰减
+  λ: 0.240 → 0.200
+  γ: 0.300 → 0.060
+
+5. 注意事项
+--------------------------------------------------------------------------------
+- 交互对索引基于因子顺序，请确保与设计空间一致
+- λ和γ调度已预先计算，可直接使用或根据需要调整
+- 中期诊断用于检查模型拟合质量和参数合理性
+- 如发现Phase 2前期交互探索不足，可手动增大λ_adjustment
+

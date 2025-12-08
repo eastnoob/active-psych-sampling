@@ -1,0 +1,118 @@
+================================================================================
+EUR 验证 - 使用复制被试 - 快速开始
+================================================================================
+
+前提条件：
+  - 已运行 reproduce_subject_cluster.py 创建被试群体
+  - 被试规格文件存在于：phase1_analysis_output/时间戳/step1_5/result/reproduced_subjects/
+
+--------------------------------------------------------------------------------
+基础用法：单个被试验证
+--------------------------------------------------------------------------------
+
+cd extensions/warmup_budget_check
+
+python run_eur_with_reproduced_subjects.py \
+    --subject_spec phase1_analysis_output/202512011547/step1_5/result/reproduced_subjects/subject_cluster_specs.json \
+    --subject_id 1 \
+    --budget 50
+
+输出：
+  eur_results/subject_1_时间戳/subject_info.json
+
+--------------------------------------------------------------------------------
+批量验证：所有20个被试
+--------------------------------------------------------------------------------
+
+# Windows (PowerShell)
+for ($i=1; $i -le 20; $i++) {
+    python run_eur_with_reproduced_subjects.py `
+        --subject_spec phase1_analysis_output/202512011547/step1_5/result/reproduced_subjects/subject_cluster_specs.json `
+        --subject_id $i `
+        --budget 50
+}
+
+# Linux/macOS (Bash)
+for subject_id in {1..20}; do
+    python run_eur_with_reproduced_subjects.py \
+        --subject_spec phase1_analysis_output/202512011547/step1_5/result/reproduced_subjects/subject_cluster_specs.json \
+        --subject_id $subject_id \
+        --budget 50
+done
+
+--------------------------------------------------------------------------------
+参数快速参考
+--------------------------------------------------------------------------------
+
+--subject_spec   被试规格JSON路径（必填）
+--subject_id     被试ID（1-N，默认1）
+--budget         EUR采样次数（默认50）
+--config         EUR配置文件（默认 eur_config_sps.ini）
+--output_dir     输出目录（默认自动生成）
+
+--------------------------------------------------------------------------------
+常见任务
+--------------------------------------------------------------------------------
+
+1. 查看可用被试数量：
+   python -c "import json; data=json.load(open('phase1_analysis_output/202512011547/step1_5/result/reproduced_subjects/subject_cluster_specs.json')); print(f'被试数量: {data[\"n_subjects\"]}')"
+
+2. 查看被试群体参数：
+   type phase1_analysis_output\202512011547\step1_5\result\reproduced_subjects\subject_cluster_summary.txt
+
+3. 验证被试响应：
+   python -c "import numpy as np, json; from tools.subject_simulator_v2.linear import LinearSubject; spec=json.load(open('...'))['subjects'][0]; oracle=LinearSubject(weights=np.array(spec['subject_weights']), interaction_weights={tuple(map(int,k.split(','))):v for k,v in spec['interaction_weights'].items()}, bias=spec['bias'], likert_levels=5, likert_sensitivity=2.0, seed=spec['seed']); print(f'测试响应: {oracle(np.array([0.5]*6))}')"
+
+--------------------------------------------------------------------------------
+调试检查点
+--------------------------------------------------------------------------------
+
+运行后应该看到：
+
+【被试模型规格 - Subject 1】
+============================================================
+  特征数量: 6
+  Likert级别: 5
+  主效应权重:
+    x0: -0.050561
+    x1: +0.000811
+    ...
+  交互项权重:
+    x3×x4: +0.120000
+    x0×x1: -0.020000
+  Bias: -0.218100
+============================================================
+
+如果没有看到，检查：
+  ✓ subject_spec 路径是否正确
+  ✓ subject_id 是否在有效范围内（1-N）
+  ✓ JSON 文件格式是否正确
+
+--------------------------------------------------------------------------------
+下一步
+--------------------------------------------------------------------------------
+
+当前脚本只完成了被试加载，完整的 EUR 验证需要：
+  1. 加载设计空间
+  2. 初始化 AEPsych Server
+  3. 运行采样循环
+  4. 效应识别
+  5. 预测质量评估
+
+详见：EUR_INTEGRATION_GUIDE.md
+
+--------------------------------------------------------------------------------
+故障排查
+--------------------------------------------------------------------------------
+
+错误1：找不到被试规格文件
+  → 确认文件路径正确，或重新运行 reproduce_subject_cluster.py
+
+错误2：被试ID超出范围
+  → 使用 1-N 范围内的ID（N=创建的被试数量）
+
+错误3：ImportError: No module named 'subject_simulator_v2'
+  → 确认在正确的目录运行（extensions/warmup_budget_check）
+  → 检查 tools/ 目录是否存在
+
+================================================================================

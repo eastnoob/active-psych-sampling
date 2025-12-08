@@ -1,0 +1,32 @@
+{
+  "subject_1": {
+    "mean": 1.0,
+    "std": 0.0,
+    "adjusted_std_used": 1.616634539179489,
+    "n": 25
+  },
+  "subject_2": {
+    "mean": 3.72,
+    "std": 0.96,
+    "adjusted_std_used": 0.96,
+    "n": 25
+  },
+  "subject_3": {
+    "mean": 1.96,
+    "std": 0.9583318840568752,
+    "adjusted_std_used": 0.9583318840568752,
+    "n": 25
+  },
+  "subject_4": {
+    "mean": 5.0,
+    "std": 0.0,
+    "adjusted_std_used": 1.616634539179489,
+    "n": 25
+  },
+  "subject_5": {
+    "mean": 4.0,
+    "std": 0.848528137423857,
+    "adjusted_std_used": 0.848528137423857,
+    "n": 25
+  }
+}

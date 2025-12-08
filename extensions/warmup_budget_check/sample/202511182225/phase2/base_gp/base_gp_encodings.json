@@ -1,0 +1,17 @@
+{
+  "x4_4level_categorical": {
+    "high": 0,
+    "low": 1,
+    "max": 2,
+    "mid": 3
+  },
+  "x5_3level_categorical": {
+    "A": 0,
+    "B": 1,
+    "C": 2
+  },
+  "x6_binary": {
+    "false": 0,
+    "true": 1
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "interaction_pairs": [
+    [
+      2,
+      5
+    ],
+    [
+      2,
+      3
+    ],
+    [
+      0,
+      5
+    ]
+  ],
+  "lambda_start": 0.1,
+  "lambda_max": 0.24,
+  "lambda_init": 0.1,
+  "lambda_end": 0.24,
+  "gamma_init": 0.3,
+  "gamma_end": 0.06,
+  "total_budget": 500,
+  "mid_diagnostic_trial": 335,
+  "phase1_diagnostics": {
+    "r2_adj_main": 0,
+    "r2_adj_full": 0,
+    "delta_adj": 0,
+    "raw_ratio": 0,
+    "noise_level_estimate": 0
+  }
+}

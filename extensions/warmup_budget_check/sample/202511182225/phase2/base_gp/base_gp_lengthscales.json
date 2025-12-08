@@ -1,0 +1,18 @@
+{
+  "factor_names": [
+    "x1_binary",
+    "x2_5level_discrete",
+    "x3_5level_decimal",
+    "x4_4level_categorical",
+    "x5_3level_categorical",
+    "x6_binary"
+  ],
+  "lengthscales": [
+    1.963550090789795,
+    1.64397394657135,
+    2.451946496963501,
+    2.608053684234619,
+    2.406524181365967,
+    2.008359909057617
+  ]
+}

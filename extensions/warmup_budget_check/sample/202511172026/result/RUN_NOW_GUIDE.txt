@@ -1,0 +1,172 @@
+【run_now.py 改进版 - 功能说明】
+
+═══════════════════════════════════════════════════════════════════════════════
+【新增功能】
+═══════════════════════════════════════════════════════════════════════════════
+
+1. 路径支持 \\ 形式
+   ✓ 接受 r"d:\path\to\file" 格式
+   ✓ 自动处理反斜杠（\\）和正斜杠（/）
+
+2. 灵活的输入选项
+   ✓ 单个 CSV 文件：INPUT_PATH = r"d:\data\subject_1.csv"
+   ✓ 文件夹模式：INPUT_PATH = r"d:\data"（自动查找 subject_*.csv）
+   ✓ 文件夹中的所有 subject_* 文件会被一起处理
+
+3. 灵活的输出模式
+   ✓ "merged" 模式：输出合并文件 + 单个文件
+     • combined_results.csv（所有数据，新增 subject 列）
+     • subject_1_result.csv, subject_2_result.csv, ...
+     • model_spec.txt
+   
+   ✓ "single" 模式：仅输出单个文件
+     • subject_1_result.csv 等（不生成合并文件）
+     • 不会生成 combined_results.csv
+
+4. 自动 Archive 历史文件
+   ✓ 新运行时自动备份旧结果到 archive 子目录
+   ✓ 时间戳：backup_20251117_235632 格式
+   ✓ 可以关闭：AUTO_ARCHIVE = False
+
+═══════════════════════════════════════════════════════════════════════════════
+【使用示例】
+═══════════════════════════════════════════════════════════════════════════════
+
+【示例 1】处理单个 CSV 文件（单个模式）
+────────────────────────────────────────────────────────────────────────────────
+INPUT_PATH = r"d:\data\my_subject.csv"
+OUTPUT_MODE = "single"
+
+输出：
+  d:\data\result\my_subject_result.csv
+  d:\data\result\model_spec.txt
+
+
+【示例 2】处理文件夹中的多个 CSV（合并模式）
+────────────────────────────────────────────────────────────────────────────────
+INPUT_PATH = r"d:\data"  # 包含 subject_1.csv, subject_2.csv, subject_3.csv
+OUTPUT_MODE = "merged"
+
+输出：
+  d:\data\result\subject_1_result.csv
+  d:\data\result\subject_2_result.csv
+  d:\data\result\subject_3_result.csv
+  d:\data\result\combined_results.csv  （合并所有，新增 subject 列）
+  d:\data\result\model_spec.txt
+
+
+【示例 3】自定义输出目录
+────────────────────────────────────────────────────────────────────────────────
+INPUT_PATH = r"d:\input_data"
+OUTPUT_DIR = r"d:\custom_output"
+
+输出全部写入 d:\custom_output
+
+
+【示例 4】改交互项配置
+────────────────────────────────────────────────────────────────────────────────
+INTERACTION_PAIRS = [(0, 1), (2, 3), (1, 4)]  # x1*x2, x3*x4, x2*x5
+INTERACTION_SCALE = 0.6
+
+# 或禁用交互项：
+INTERACTION_PAIRS = []  # 空列表 = 无交互项
+
+
+【示例 5】关闭自动 Archive
+────────────────────────────────────────────────────────────────────────────────
+AUTO_ARCHIVE = False
+
+（旧文件会被覆盖，不会备份）
+
+
+═══════════════════════════════════════════════════════════════════════════════
+【Archive 文件夹结构】
+═══════════════════════════════════════════════════════════════════════════════
+
+output_dir/
+  ├── subject_1_result.csv        （当前结果）
+  ├── subject_2_result.csv
+  ├── combined_results.csv
+  ├── model_spec.txt
+  └── archive/                     （历史记录）
+      ├── backup_20251117_235632/
+      │   ├── subject_1_result.csv （前一次运行）
+      │   ├── subject_2_result.csv
+      │   ├── combined_results.csv
+      │   └── model_spec.txt
+      └── backup_20251117_235650/
+          ├── subject_1_result.csv （再前一次）
+          └── ...
+
+
+═══════════════════════════════════════════════════════════════════════════════
+【快速复制粘贴配置】
+═══════════════════════════════════════════════════════════════════════════════
+
+【配置 A】处理单个文件，不要合并
+────────────────────────────────────────────────────────────────────────────────
+INPUT_PATH = r"d:\path\to\file.csv"
+OUTPUT_DIR = None
+OUTPUT_MODE = "single"
+INTERACTION_PAIRS = [(3, 4), (0, 1), (1, 3)]
+INTERACTION_SCALE = 0.4
+SEED = 42
+AUTO_ARCHIVE = True
+
+
+【配置 B】处理整个文件夹，输出合并结果
+────────────────────────────────────────────────────────────────────────────────
+INPUT_PATH = r"d:\path\to\folder"
+OUTPUT_DIR = None
+OUTPUT_MODE = "merged"
+INTERACTION_PAIRS = [(3, 4), (0, 1), (1, 3)]
+INTERACTION_SCALE = 0.4
+SEED = 42
+AUTO_ARCHIVE = True
+
+
+【配置 C】自定义输出路径和交互项
+────────────────────────────────────────────────────────────────────────────────
+INPUT_PATH = r"d:\data"
+OUTPUT_DIR = r"d:\my_output"
+OUTPUT_MODE = "merged"
+INTERACTION_PAIRS = [(0, 1), (1, 2), (2, 3)]
+INTERACTION_SCALE = 0.5
+SEED = 123
+AUTO_ARCHIVE = True
+
+
+═══════════════════════════════════════════════════════════════════════════════
+【实现细节】
+═══════════════════════════════════════════════════════════════════════════════
+
+【normalize_path()】
+  • 将路径中的 \\ 转换为 /
+  • 支持任何形式的 Windows 路径
+  例：r"d:\data\\folder" → d:\data\folder
+
+【find_csv_files()】
+  • 单文件：返回 [file]
+  • 文件夹：返回 sorted(subject_*.csv)
+
+【determine_output_dir()】
+  • 优先级：用户指定 > 自动推断
+  • 文件夹输入：input_path/result
+  • 单文件输入：input_path.parent/result
+
+【run_single_csv()】
+  • 创建临时目录，改名为 subject_1.csv
+  • 运行模拟
+  • 改名输出文件为原文件名 + _result
+  • 清理临时目录
+
+【archive_old_results()】
+  • 扫描输出目录中的 subject_*_result.csv, combined_results.csv, model_spec.txt
+  • 移动到 archive/backup_TIMESTAMP/
+  • 每次运行创建新备份
+
+【cleanup_unwanted_files()】
+  • "single" 模式：删除 combined_results.csv
+  • "merged" 模式：保留所有
+
+═══════════════════════════════════════════════════════════════════════════════

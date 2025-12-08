@@ -1,0 +1,22 @@
+{
+  "interaction_pairs": [
+    [
+      3,
+      4
+    ],
+    [
+      0,
+      1
+    ],
+    [
+      1,
+      3
+    ]
+  ],
+  "lambda_init": 0.24,
+  "lambda_end": 0.2,
+  "gamma_init": 0.3,
+  "gamma_end": 0.06,
+  "total_budget": 450,
+  "mid_diagnostic_trial": 301
+}

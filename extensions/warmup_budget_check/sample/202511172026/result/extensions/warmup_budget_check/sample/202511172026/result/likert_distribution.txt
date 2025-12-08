@@ -1,0 +1,10 @@
+Likert distribution summary
+========================
+
+Level 1: 25
+Level 2: 25
+Level 3: 25
+Level 4: 25
+Level 5: 25
+
+Total: 125

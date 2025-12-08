@@ -1,0 +1,21 @@
+{
+  "x3_OuterFurniture": {
+    "Chaos": 0,
+    "Rotated": 1,
+    "Strict": 2
+  },
+  "x4_VisualBoundary": {
+    "Color": 0,
+    "Solid": 1,
+    "Translucent": 2
+  },
+  "x5_PhysicalBoundary": {
+    "Closed": 0,
+    "Open": 1
+  },
+  "x6_InnerFurniture": {
+    "Rotated": 1,
+    "Strict": 2,
+    "Chaos": 0
+  }
+}

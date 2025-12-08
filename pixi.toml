@@ -1,5 +1,6 @@
 [workspace]
 channels = ["conda-forge"]
+preview = ["pixi-build"]
 name = "aepsych-cpu"
 platforms = ["win-64"]
 version = "0.1.0"

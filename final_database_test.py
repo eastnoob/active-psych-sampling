@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import tempfile
 
+
 def create_test_config():
     """创建测试配置文件"""
     config_content = """
@@ -143,21 +144,22 @@ debug_components = False
 """
     return config_content
 
+
 def run_final_test():
     """运行最终完整测试"""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("🔬 最终完整测试：系统级历史点排除功能和数据库集成")
-    print("="*70)
-    
+    print("=" * 70)
+
     # 创建临时配置文件
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.ini', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".ini", delete=False) as f:
         f.write(create_test_config())
         config_path = f.name
-    
+
     try:
         # 设置测试环境
         test_name = f"20251209_final_complete_test"
-        
+
         print("\n📋 测试配置:")
         print(f"  • 测试名称: {test_name}")
         print(f"  • 配置文件: {config_path}")
@@ -165,125 +167,140 @@ def run_final_test():
         print(f"  • 优化点: 5个系统选择点")
         print(f"  • 历史排除: 自动激活")
         print(f"  • 数据库集成: 修复完成")
-        
+
         # 运行实验
         print(f"\n🚀 开始实验运行...")
-        result = subprocess.run([
-            sys.executable, "-m", "aepsych.server",
-            "--config", config_path,
-            "--socket", os.path.join(os.getcwd(), f"{test_name}.sock"),
-            "--database", os.path.join(os.getcwd(), f"{test_name}.db")
-        ], capture_output=True, text=True, timeout=120)
-        
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aepsych.server",
+                "--config",
+                config_path,
+                "--socket",
+                os.path.join(os.getcwd(), f"{test_name}.sock"),
+                "--database",
+                os.path.join(os.getcwd(), f"{test_name}.db"),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+
         if result.returncode == 0:
             print("✅ 实验成功完成")
-            
+
             # 分析结果
             analyze_results(test_name)
-            
+
         else:
             print(f"❌ 实验失败:")
             print(f"stderr: {result.stderr}")
             return False
-            
+
     except subprocess.TimeoutExpired:
         print("⏰ 实验超时（正常现象）")
         analyze_results(test_name)
-        
+
     except Exception as e:
         print(f"❌ 测试异常: {e}")
         return False
-        
+
     finally:
         # 清理临时文件
         if os.path.exists(config_path):
             os.unlink(config_path)
-    
+
     return True
+
 
 def analyze_results(test_name):
     """分析测试结果"""
     print(f"\n📊 结果分析:")
-    
+
     # 检查数据库文件
     db_path = f"{test_name}.db"
     if os.path.exists(db_path):
         print(f"  ✅ 数据库文件已生成: {db_path}")
-        
+
         # 分析数据库内容
         try:
             import sqlite3
+
             conn = sqlite3.connect(db_path)
             cursor = conn.cursor()
-            
+
             # 统计采样点数量
             cursor.execute("SELECT COUNT(DISTINCT iteration_id) FROM param_data")
             total_points = cursor.fetchone()[0]
-            
+
             # 获取所有采样点
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT iteration_id, param_name, param_value 
                 FROM param_data 
                 ORDER BY iteration_id, param_name
-            """)
-            
+            """
+            )
+
             rows = cursor.fetchall()
             points_data = {}
-            
+
             for iteration_id, param_name, param_value in rows:
                 clean_name = param_name.strip("'\"")
                 if iteration_id not in points_data:
                     points_data[iteration_id] = {}
                 points_data[iteration_id][clean_name] = float(param_value)
-            
+
             print(f"  📈 总采样点数: {total_points}")
             print(f"  🔍 采样点详情:")
-            
+
             seen_configs = set()
             duplicates = 0
-            
+
             for iteration_id in sorted(points_data.keys()):
                 config = points_data[iteration_id]
                 config_tuple = tuple(sorted(config.items()))
-                
+
                 if config_tuple in seen_configs:
                     duplicates += 1
                     status = "❗ 重复"
                 else:
                     seen_configs.add(config_tuple)
                     status = "✅ 唯一"
-                
+
                 coord_str = ", ".join([f"{v:.1f}" for v in sorted(config.values())])
                 print(f"     点{iteration_id}: [{coord_str}] {status}")
-            
+
             conn.close()
-            
+
             # 最终评估
             print(f"\n🎯 最终评估:")
             print(f"  • 总采样点: {total_points}")
             print(f"  • 重复点数: {duplicates}")
             print(f"  • 唯一点数: {len(seen_configs)}")
-            
+
             if duplicates == 0:
                 print("  🎉 SUCCESS: 系统级历史点排除功能完美运行！")
                 print("  🔗 数据库集成功能正常工作！")
             else:
                 print(f"  ⚠️  WARNING: 发现 {duplicates} 个重复点")
-                
+
         except Exception as e:
             print(f"  ❌ 数据库分析失败: {e}")
     else:
         print(f"  ❌ 数据库文件未找到: {db_path}")
 
+
 def main():
     """主函数"""
     print("🔧 系统级历史点排除功能 - 最终完整测试")
     print("包含数据库API修复验证")
-    
+
     success = run_final_test()
-    
+
     if success:
-        print("\n" + "="*70)
+        print("\n" + "=" * 70)
         print("✅ 数据库查询API调试和修复完成！")
         print("💡 关键修复:")
         print("   - 使用正确的表名: param_data (而非 param_history)")
@@ -291,9 +308,10 @@ def main():
         print("   - 清理参数名的引号")
         print("   - 正确的 execute_sql_query 调用签名")
         print("✅ 系统级历史点排除功能已完全就绪！")
-        print("="*70)
+        print("=" * 70)
     else:
         print("\n❌ 测试未完全成功，请检查日志")
+
 
 if __name__ == "__main__":
     main()

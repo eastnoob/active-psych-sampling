@@ -1,0 +1,36 @@
+{
+  "response_keys": [
+    "config",
+    "is_finished",
+    "num_points"
+  ],
+  "x_dict_keys": [
+    "'x1_CeilingHeight'",
+    "'x2_GridModule'",
+    "'x3_OuterFurniture'",
+    "'x4_VisualBoundary'",
+    "'x5_PhysicalBoundary'",
+    "'x6_InnerFurniture'"
+  ],
+  "x_dict_values": {
+    "'x1_CeilingHeight'": [
+      4.0
+    ],
+    "'x2_GridModule'": [
+      6.5
+    ],
+    "'x3_OuterFurniture'": [
+      0.0
+    ],
+    "'x4_VisualBoundary'": [
+      0.0
+    ],
+    "'x5_PhysicalBoundary'": [
+      1.0
+    ],
+    "'x6_InnerFurniture'": [
+      2.0
+    ]
+  },
+  "response_full": "{'config': {\"'x1_CeilingHeight'\": [4.0], \"'x2_GridModule'\": [6.5], \"'x3_OuterFurniture'\": [0.0], \"'x4_VisualBoundary'\": [0.0], \"'x5_PhysicalBoundary'\": [1.0], \"'x6_InnerFurniture'\": [2.0]}, 'is_finished': False, 'num_points': 1}"
+}

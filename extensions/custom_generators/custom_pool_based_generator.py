@@ -128,7 +128,7 @@ class CustomPoolBasedGenerator(AcqfGenerator):
 
         self.pool_points = pool_points
         self._used_indices = set()
-        
+
         # Server instance for database access
         self._aepsych_server = None
         self._current_idx = 0
@@ -171,7 +171,9 @@ class CustomPoolBasedGenerator(AcqfGenerator):
         excluded_count = 0
         sampling_history = self._get_sampling_history_from_server()
         if sampling_history is not None and len(sampling_history) > 0:
-            excluded_count = self._exclude_historical_points_from_history(sampling_history)
+            excluded_count = self._exclude_historical_points_from_history(
+                sampling_history
+            )
             if excluded_count > 0:
                 logger.info(f"[PoolGen] 已排除 {excluded_count} 个新的历史采样点")
 
@@ -447,6 +449,7 @@ class CustomPoolBasedGenerator(AcqfGenerator):
             except Exception:
                 # Provide default acquisition function
                 from botorch.acquisition import qUpperConfidenceBound
+
                 options["acqf"] = qUpperConfidenceBound
 
         options = super().get_config_options(config, name, options)
@@ -482,7 +485,9 @@ class CustomPoolBasedGenerator(AcqfGenerator):
         """【新增】获取缓存的采集函数实例（用于诊断）"""
         return self._acqf_instance
 
-    def _exclude_historical_points_from_history(self, sampling_history: torch.Tensor) -> int:
+    def _exclude_historical_points_from_history(
+        self, sampling_history: torch.Tensor
+    ) -> int:
         """
         从采样历史中排除已使用的历史点
 
@@ -513,10 +518,10 @@ class CustomPoolBasedGenerator(AcqfGenerator):
     def _get_sampling_history_from_server(self) -> torch.Tensor:
         """
         系统级自动获取AEPsych服务器的采样历史
-        
+
         通过反向查找获取服务器实例，并从数据库中读取原始采样坐标
         这样即使只通过INI配置也能自动工作
-        
+
         Returns:
             torch.Tensor: 采样历史张量 [n_points, n_dim] 或 None
         """
@@ -526,70 +531,76 @@ class CustomPoolBasedGenerator(AcqfGenerator):
             if server is None:
                 logger.debug("[PoolGen] 无法找到AEPsych服务器实例")
                 return None
-            
+
             # 从服务器数据库获取采样历史
             import sqlite3
             import pandas as pd
-            
-            if not hasattr(server, 'db') or server.db is None:
+
+            if not hasattr(server, "db") or server.db is None:
                 logger.debug("[PoolGen] 服务器无数据库连接")
                 return None
-                
+
             # 查询原始采样数据 - 使用实际表名 param_data
             query = """
             SELECT param_name, param_value, iteration_id 
             FROM param_data 
             ORDER BY iteration_id, param_name
             """
-            
+
             result = server.db.execute_sql_query(query, {})
             rows = result
-            
+
             if not rows:
                 logger.debug("[PoolGen] 数据库中无采样历史")
                 return None
-                
+
             # 解析为坐标格式
             param_dict = {}
             for param_name, param_value, iteration_id in rows:
                 # 清理参数名的引号（数据库中参数名带引号）
                 clean_param_name = param_name.strip("'\"")
-                
+
                 if iteration_id not in param_dict:
                     param_dict[iteration_id] = {}
                 param_dict[iteration_id][clean_param_name] = float(param_value)
-            
+
             # 转换为张量格式 [n_trials, n_dim]
             if not param_dict:
                 return None
-                
+
             iteration_ids = sorted(param_dict.keys())
-            param_names = sorted(param_dict[iteration_ids[0]].keys()) if iteration_ids else []
-            
+            param_names = (
+                sorted(param_dict[iteration_ids[0]].keys()) if iteration_ids else []
+            )
+
             if not param_names:
                 return None
-                
+
             sampling_data = []
             for iteration_id in iteration_ids:
-                point = [param_dict[iteration_id].get(pname, 0.0) for pname in param_names]
+                point = [
+                    param_dict[iteration_id].get(pname, 0.0) for pname in param_names
+                ]
                 sampling_data.append(point)
-            
+
             if sampling_data:
                 sampling_history = torch.tensor(sampling_data, dtype=torch.float32)
-                logger.debug(f"[PoolGen] 从服务器获取到 {len(sampling_history)} 个历史采样点")
+                logger.debug(
+                    f"[PoolGen] 从服务器获取到 {len(sampling_history)} 个历史采样点"
+                )
                 return sampling_history
-                
+
         except Exception as e:
             logger.debug(f"[PoolGen] 获取采样历史失败: {e}")
-            
+
         return None
-    
+
     def _find_aepsych_server(self):
         """
         智能查找AEPsych服务器实例
-        
+
         通过多种方式尝试定位当前运行的服务器实例
-        
+
         Returns:
             AEPsychServer实例或None
         """
@@ -597,44 +608,58 @@ class CustomPoolBasedGenerator(AcqfGenerator):
         if self._aepsych_server is not None:
             logger.debug(f"[PoolGen] 使用手动设置的服务器实例")
             return self._aepsych_server
-            
+
         try:
             # 方法1: 通过全局变量查找
             import sys
+
             for name, obj in sys.modules.items():
-                if hasattr(obj, '__dict__'):
+                if hasattr(obj, "__dict__"):
                     for attr_name, attr_val in obj.__dict__.items():
-                        if (hasattr(attr_val, 'db') and 
-                            hasattr(attr_val, 'handle_request') and
-                            'AEPsychServer' in str(type(attr_val))):
-                            logger.debug(f"[PoolGen] 通过模块 {name}.{attr_name} 找到服务器")
+                        if (
+                            hasattr(attr_val, "db")
+                            and hasattr(attr_val, "handle_request")
+                            and "AEPsychServer" in str(type(attr_val))
+                        ):
+                            logger.debug(
+                                f"[PoolGen] 通过模块 {name}.{attr_name} 找到服务器"
+                            )
                             return attr_val
-            
+
             # 方法2: 通过调用栈查找
             import inspect
+
             for frame_info in inspect.stack():
                 frame_locals = frame_info.frame.f_locals
                 frame_globals = frame_info.frame.f_globals
-                
+
                 # 检查局部变量
                 for var_name, var_val in frame_locals.items():
-                    if (hasattr(var_val, 'db') and 
-                        hasattr(var_val, 'handle_request') and
-                        'AEPsychServer' in str(type(var_val))):
-                        logger.debug(f"[PoolGen] 通过调用栈局部变量 {var_name} 找到服务器")
+                    if (
+                        hasattr(var_val, "db")
+                        and hasattr(var_val, "handle_request")
+                        and "AEPsychServer" in str(type(var_val))
+                    ):
+                        logger.debug(
+                            f"[PoolGen] 通过调用栈局部变量 {var_name} 找到服务器"
+                        )
                         return var_val
-                        
+
                 # 检查全局变量
                 for var_name, var_val in frame_globals.items():
-                    if (hasattr(var_val, 'db') and 
-                        hasattr(var_val, 'handle_request') and
-                        'AEPsychServer' in str(type(var_val))):
-                        logger.debug(f"[PoolGen] 通过调用栈全局变量 {var_name} 找到服务器")
+                    if (
+                        hasattr(var_val, "db")
+                        and hasattr(var_val, "handle_request")
+                        and "AEPsychServer" in str(type(var_val))
+                    ):
+                        logger.debug(
+                            f"[PoolGen] 通过调用栈全局变量 {var_name} 找到服务器"
+                        )
                         return var_val
-            
+
         except Exception as e:
             logger.debug(f"[PoolGen] 查找服务器失败: {e}")
-            
+
         return None
 
     def set_aepsych_server(self, server):

@@ -26,9 +26,9 @@ import torch
 from aepsych.config import Config
 from aepsych.models.base import AEPsychModelMixin
 from aepsych.utils import _process_bounds
-from aepsych.utils_logging import logger
 from aepsych.generators.base import AcqfGenerator
 from botorch.acquisition import AcquisitionFunction
+from loguru import logger
 
 
 class CustomPoolBasedGenerator(AcqfGenerator):
@@ -163,6 +163,13 @@ class CustomPoolBasedGenerator(AcqfGenerator):
                 f"Cannot fix features when generating from {self.__class__.__name__}"
             )
 
+        # Exclude historical points from model training data
+        excluded_count = 0
+        if model is not None:
+            excluded_count = self._exclude_historical_points(model)
+            if excluded_count > 0:
+                logger.info(f"[PoolGen] 已排除 {excluded_count} 个新的历史采样点")
+
         # Get available points
         available_indices = self._get_available_indices()
 
@@ -189,7 +196,7 @@ class CustomPoolBasedGenerator(AcqfGenerator):
 
         available_points = self.pool_points[available_indices]
 
-        # If model is provided, use acquisition function to select points
+        # If model is provided, use acquisition function to select points  
         if model is not None:
             model.eval()
 
@@ -218,9 +225,7 @@ class CustomPoolBasedGenerator(AcqfGenerator):
                 if hasattr(model, "train_inputs") and model.train_inputs
                 else 0
             )
-            from loguru import logger as loguru_logger
-
-            loguru_logger.debug(
+            logger.debug(
                 f"[PoolGen] model_id={id(model)}, train_inputs[0]_id={id(model.train_inputs[0]) if hasattr(model, 'train_inputs') and model.train_inputs else 'None'}, current_train_size={current_train_size}, _last_model_train_size={self._last_model_train_size}"
             )
             need_recreate = (
@@ -228,7 +233,7 @@ class CustomPoolBasedGenerator(AcqfGenerator):
                 or self._last_model_train_size is None
                 or current_train_size != self._last_model_train_size
             )
-            loguru_logger.debug(
+            logger.debug(
                 f"[PoolGen] need_recreate={need_recreate}, _acqf_instance={'None' if self._acqf_instance is None else type(self._acqf_instance).__name__}"
             )
 
@@ -265,7 +270,7 @@ class CustomPoolBasedGenerator(AcqfGenerator):
                                 old_we.sps_tracker, "r_t_smoothed", None
                             ),
                         }
-                    loguru_logger.debug(
+                    logger.debug(
                         f"[PoolGen] Saved old weight_engine state: _r_t_smoothed={old_weight_engine_state['_r_t_smoothed']}, sps_state={'exists' if old_sps_tracker_state else 'None'}"
                     )
 
@@ -307,7 +312,7 @@ class CustomPoolBasedGenerator(AcqfGenerator):
                                 "r_t_smoothed"
                             ]
 
-                    loguru_logger.debug(
+                    logger.debug(
                         f"[PoolGen] Restored weight_engine state: _prev_core_params={'exists' if new_we._prev_core_params is not None else 'None'}, _r_t_smoothed={new_we._r_t_smoothed}"
                     )
 
@@ -362,12 +367,12 @@ class CustomPoolBasedGenerator(AcqfGenerator):
                 selected_pool_indices.tolist(),
             )
 
+            # 计算总的已使用点数（包括刚选中的点）
+            total_used = len(self._used_indices)
             logger.info(
-                "Selected %s point(s) using %s; indices=%s; used_before=%d",
-                actual_num_points,
-                self.acqf.__name__,
-                selected_pool_indices.tolist(),
-                len(self._used_indices),
+                f"[PoolGen] 选中 {actual_num_points} 个点: 索引={selected_pool_indices.tolist()}, "
+                f"总已用点={total_used}个, 剩余={len(self.pool_points)-total_used}个, "
+                f"采集函数={self.acqf.__name__}"
             )
         else:
             # Fallback: sequential selection if no model (shouldn't happen with _requires_model=True)
@@ -469,6 +474,66 @@ class CustomPoolBasedGenerator(AcqfGenerator):
     def get_acqf_instance(self):
         """【新增】获取缓存的采集函数实例（用于诊断）"""
         return self._acqf_instance
+
+    def _exclude_historical_points(self, model: AEPsychModelMixin) -> int:
+        """
+        排除模型训练数据中已使用的历史点
+        
+        Args:
+            model: 训练好的AEPsych模型
+            
+        Returns:
+            int: 排除的历史点数量
+        """
+        if not hasattr(model, 'train_inputs') or not model.train_inputs:
+            return 0
+            
+        # 获取历史训练点
+        train_inputs = model.train_inputs[0]  # [n_points, n_dim]
+        if train_inputs is None or len(train_inputs) == 0:
+            return 0
+            
+        logger.debug(f"[PoolGen] 检查 {len(train_inputs)} 个历史训练点")
+        
+        # 将训练点匹配到设计空间索引
+        excluded_indices = self._match_points_to_pool_indices(train_inputs)
+        
+        # 更新已使用索引集合
+        original_used_count = len(self._used_indices)
+        self._used_indices.update(excluded_indices)
+        newly_excluded = len(self._used_indices) - original_used_count
+        
+        if newly_excluded > 0:
+            logger.debug(f"[PoolGen] 新排除历史点索引: {sorted(excluded_indices - set(range(original_used_count)))}")
+        
+        return newly_excluded
+    
+    def _match_points_to_pool_indices(self, train_points: torch.Tensor) -> set[int]:
+        """
+        将训练点匹配到池中对应的索引
+        
+        Args:
+            train_points: 训练点张量 [n_points, n_dim]
+            
+        Returns:
+            set[int]: 匹配到的池索引集合
+        """
+        matched_indices = set()
+        tolerance = 1e-6  # 浮点数比较容差
+        
+        for train_point in train_points:
+            # 计算与池中所有点的距离
+            distances = torch.norm(self.pool_points - train_point.unsqueeze(0), dim=1)
+            min_distance, closest_idx = torch.min(distances, dim=0)
+            
+            # 如果距离足够小，认为是匹配的点
+            if min_distance.item() < tolerance:
+                matched_indices.add(closest_idx.item())
+                logger.debug(f"[PoolGen] 匹配: 训练点 {train_point.tolist()[:3]}... -> 池索引 {closest_idx.item()} (距离: {min_distance.item():.2e})")
+            else:
+                logger.warning(f"[PoolGen] 未匹配: 训练点 {train_point.tolist()[:3]}... (最小距离: {min_distance.item():.2e})")
+        
+        return matched_indices
 
 
 # Register the CustomPoolBasedGenerator with the Config system

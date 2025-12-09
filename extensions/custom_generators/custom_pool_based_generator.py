@@ -128,6 +128,9 @@ class CustomPoolBasedGenerator(AcqfGenerator):
 
         self.pool_points = pool_points
         self._used_indices = set()
+        
+        # Server instance for database access
+        self._aepsych_server = None
         self._current_idx = 0
         self.max_asks = len(self.pool_points) if not allow_resampling else None
 
@@ -163,10 +166,12 @@ class CustomPoolBasedGenerator(AcqfGenerator):
                 f"Cannot fix features when generating from {self.__class__.__name__}"
             )
 
-        # Exclude historical points from model training data
+        # 【新增】历史点排除功能：防止重复采样已训练过的点
+        # 系统级自动获取采样历史，无需外部调用
         excluded_count = 0
-        if model is not None:
-            excluded_count = self._exclude_historical_points(model)
+        sampling_history = self._get_sampling_history_from_server()
+        if sampling_history is not None and len(sampling_history) > 0:
+            excluded_count = self._exclude_historical_points_from_history(sampling_history)
             if excluded_count > 0:
                 logger.info(f"[PoolGen] 已排除 {excluded_count} 个新的历史采样点")
 
@@ -196,7 +201,7 @@ class CustomPoolBasedGenerator(AcqfGenerator):
 
         available_points = self.pool_points[available_indices]
 
-        # If model is provided, use acquisition function to select points  
+        # If model is provided, use acquisition function to select points
         if model is not None:
             model.eval()
 
@@ -440,7 +445,9 @@ class CustomPoolBasedGenerator(AcqfGenerator):
                 acqf_class = config.getobj(name, "acqf")
                 options["acqf"] = acqf_class
             except Exception:
-                pass  # Let parent class handle the error
+                # Provide default acquisition function
+                from botorch.acquisition import qUpperConfidenceBound
+                options["acqf"] = qUpperConfidenceBound
 
         options = super().get_config_options(config, name, options)
 
@@ -475,64 +482,195 @@ class CustomPoolBasedGenerator(AcqfGenerator):
         """【新增】获取缓存的采集函数实例（用于诊断）"""
         return self._acqf_instance
 
-    def _exclude_historical_points(self, model: AEPsychModelMixin) -> int:
+    def _exclude_historical_points_from_history(self, sampling_history: torch.Tensor) -> int:
         """
-        排除模型训练数据中已使用的历史点
-        
+        从采样历史中排除已使用的历史点
+
         Args:
-            model: 训练好的AEPsych模型
-            
+            sampling_history: 采样历史张量 [n_points, n_dim]，包含原始坐标
+
         Returns:
             int: 排除的历史点数量
         """
-        if not hasattr(model, 'train_inputs') or not model.train_inputs:
+        if sampling_history is None or len(sampling_history) == 0:
             return 0
-            
-        # 获取历史训练点
-        train_inputs = model.train_inputs[0]  # [n_points, n_dim]
-        if train_inputs is None or len(train_inputs) == 0:
-            return 0
-            
-        logger.debug(f"[PoolGen] 检查 {len(train_inputs)} 个历史训练点")
-        
-        # 将训练点匹配到设计空间索引
-        excluded_indices = self._match_points_to_pool_indices(train_inputs)
-        
+
+        logger.debug(f"[PoolGen] 检查采样历史中的 {len(sampling_history)} 个点")
+
+        # 将历史采样点匹配到设计空间索引
+        excluded_indices = self._match_points_to_pool_indices(sampling_history)
+
         # 更新已使用索引集合
         original_used_count = len(self._used_indices)
         self._used_indices.update(excluded_indices)
         newly_excluded = len(self._used_indices) - original_used_count
-        
+
         if newly_excluded > 0:
-            logger.debug(f"[PoolGen] 新排除历史点索引: {sorted(excluded_indices - set(range(original_used_count)))}")
-        
+            logger.debug(f"[PoolGen] 新排除历史点索引: {sorted(excluded_indices)}")
+
         return newly_excluded
+
+    def _get_sampling_history_from_server(self) -> torch.Tensor:
+        """
+        系统级自动获取AEPsych服务器的采样历史
+        
+        通过反向查找获取服务器实例，并从数据库中读取原始采样坐标
+        这样即使只通过INI配置也能自动工作
+        
+        Returns:
+            torch.Tensor: 采样历史张量 [n_points, n_dim] 或 None
+        """
+        try:
+            # 尝试获取服务器实例 - 通过多种方式查找
+            server = self._find_aepsych_server()
+            if server is None:
+                logger.debug("[PoolGen] 无法找到AEPsych服务器实例")
+                return None
+            
+            # 从服务器数据库获取采样历史
+            import sqlite3
+            import pandas as pd
+            
+            if not hasattr(server, 'db') or server.db is None:
+                logger.debug("[PoolGen] 服务器无数据库连接")
+                return None
+                
+            # 查询原始采样数据 - 使用实际表名 param_data
+            query = """
+            SELECT param_name, param_value, iteration_id 
+            FROM param_data 
+            ORDER BY iteration_id, param_name
+            """
+            
+            result = server.db.execute_sql_query(query, {})
+            rows = result
+            
+            if not rows:
+                logger.debug("[PoolGen] 数据库中无采样历史")
+                return None
+                
+            # 解析为坐标格式
+            param_dict = {}
+            for param_name, param_value, iteration_id in rows:
+                # 清理参数名的引号（数据库中参数名带引号）
+                clean_param_name = param_name.strip("'\"")
+                
+                if iteration_id not in param_dict:
+                    param_dict[iteration_id] = {}
+                param_dict[iteration_id][clean_param_name] = float(param_value)
+            
+            # 转换为张量格式 [n_trials, n_dim]
+            if not param_dict:
+                return None
+                
+            iteration_ids = sorted(param_dict.keys())
+            param_names = sorted(param_dict[iteration_ids[0]].keys()) if iteration_ids else []
+            
+            if not param_names:
+                return None
+                
+            sampling_data = []
+            for iteration_id in iteration_ids:
+                point = [param_dict[iteration_id].get(pname, 0.0) for pname in param_names]
+                sampling_data.append(point)
+            
+            if sampling_data:
+                sampling_history = torch.tensor(sampling_data, dtype=torch.float32)
+                logger.debug(f"[PoolGen] 从服务器获取到 {len(sampling_history)} 个历史采样点")
+                return sampling_history
+                
+        except Exception as e:
+            logger.debug(f"[PoolGen] 获取采样历史失败: {e}")
+            
+        return None
     
+    def _find_aepsych_server(self):
+        """
+        智能查找AEPsych服务器实例
+        
+        通过多种方式尝试定位当前运行的服务器实例
+        
+        Returns:
+            AEPsychServer实例或None
+        """
+        # 优先使用手动设置的服务器实例
+        if self._aepsych_server is not None:
+            logger.debug(f"[PoolGen] 使用手动设置的服务器实例")
+            return self._aepsych_server
+            
+        try:
+            # 方法1: 通过全局变量查找
+            import sys
+            for name, obj in sys.modules.items():
+                if hasattr(obj, '__dict__'):
+                    for attr_name, attr_val in obj.__dict__.items():
+                        if (hasattr(attr_val, 'db') and 
+                            hasattr(attr_val, 'handle_request') and
+                            'AEPsychServer' in str(type(attr_val))):
+                            logger.debug(f"[PoolGen] 通过模块 {name}.{attr_name} 找到服务器")
+                            return attr_val
+            
+            # 方法2: 通过调用栈查找
+            import inspect
+            for frame_info in inspect.stack():
+                frame_locals = frame_info.frame.f_locals
+                frame_globals = frame_info.frame.f_globals
+                
+                # 检查局部变量
+                for var_name, var_val in frame_locals.items():
+                    if (hasattr(var_val, 'db') and 
+                        hasattr(var_val, 'handle_request') and
+                        'AEPsychServer' in str(type(var_val))):
+                        logger.debug(f"[PoolGen] 通过调用栈局部变量 {var_name} 找到服务器")
+                        return var_val
+                        
+                # 检查全局变量
+                for var_name, var_val in frame_globals.items():
+                    if (hasattr(var_val, 'db') and 
+                        hasattr(var_val, 'handle_request') and
+                        'AEPsychServer' in str(type(var_val))):
+                        logger.debug(f"[PoolGen] 通过调用栈全局变量 {var_name} 找到服务器")
+                        return var_val
+            
+        except Exception as e:
+            logger.debug(f"[PoolGen] 查找服务器失败: {e}")
+            
+        return None
+
+    def set_aepsych_server(self, server):
+        """直接设置AEPsych服务器实例用于数据库访问"""
+        self._aepsych_server = server
+        logger.debug(f"[PoolGen] 手动设置服务器实例: {type(server)}")
+
     def _match_points_to_pool_indices(self, train_points: torch.Tensor) -> set[int]:
         """
         将训练点匹配到池中对应的索引
-        
+
         Args:
             train_points: 训练点张量 [n_points, n_dim]
-            
+
         Returns:
             set[int]: 匹配到的池索引集合
         """
         matched_indices = set()
         tolerance = 1e-6  # 浮点数比较容差
-        
+
         for train_point in train_points:
             # 计算与池中所有点的距离
             distances = torch.norm(self.pool_points - train_point.unsqueeze(0), dim=1)
             min_distance, closest_idx = torch.min(distances, dim=0)
-            
+
             # 如果距离足够小，认为是匹配的点
             if min_distance.item() < tolerance:
                 matched_indices.add(closest_idx.item())
-                logger.debug(f"[PoolGen] 匹配: 训练点 {train_point.tolist()[:3]}... -> 池索引 {closest_idx.item()} (距离: {min_distance.item():.2e})")
+                logger.debug(
+                    f"[PoolGen] 匹配: 训练点 {train_point.tolist()[:3]}... -> 池索引 {closest_idx.item()} (距离: {min_distance.item():.2e})"
+                )
             else:
-                logger.warning(f"[PoolGen] 未匹配: 训练点 {train_point.tolist()[:3]}... (最小距离: {min_distance.item():.2e})")
-        
+                logger.warning(
+                    f"[PoolGen] 未匹配: 训练点 {train_point.tolist()[:3]}... (最小距离: {min_distance.item():.2e})"
+                )
+
         return matched_indices
 
 

@@ -15,20 +15,20 @@ from extensions.warmup_budget_check.core.phase1_step3_base_gp_v2 import (
 
 def test_smart_factor_selection(tmp_path: Path):
     # Prepare a simple sample dataset with x1..x3 and a response
-    df = pd.DataFrame({
-        "x1": [0, 1, 0, 1],
-        "x2": [1, 2, 1, 2],
-        "x3": [0.0, 0.25, 0.5, 0.75],
-    })
+    df = pd.DataFrame(
+        {
+            "x1": [0, 1, 0, 1],
+            "x2": [1, 2, 1, 2],
+            "x3": [0.0, 0.25, 0.5, 0.75],
+        }
+    )
     df["subject_id"] = ["s1", "s1", "s2", "s2"]
     df["response"] = df["x1"] + df["x2"] + df["x3"]
     data_csv = tmp_path / "phase1_test.csv"
     df.to_csv(data_csv, index=False)
 
     # Create a simple design_space csv (matching columns x1..x3)
-    design_df = pd.DataFrame(
-        {"x1": [0, 1], "x2": [1, 2], "x3": [0.0, 0.75]}
-    )
+    design_df = pd.DataFrame({"x1": [0, 1], "x2": [1, 2], "x3": [0.0, 0.75]})
     design_csv = tmp_path / "design_space_test.csv"
     design_df.to_csv(design_csv, index=False)
 

@@ -1,0 +1,981 @@
+#!/usr/bin/env python3
+# Copyright (c) Facebook, Inc. and its affiliates.
+# All rights reserved.
+
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+"""
+Pool-Based Generator for AEPsych with Acquisition Function Support
+
+This generator selects points from a predefined pool of candidate points using
+acquisition functions to intelligently choose the most informative points.
+It's useful for pool-based active learning scenarios where you have a fixed set
+of candidate points and want to select the best ones based on model uncertainty
+or other criteria.
+"""
+
+from typing import Any, Optional
+import sys
+import os
+import sqlite3
+import tempfile
+from pathlib import Path
+
+# Add temp_aepsych to path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "temp_aepsych"))
+
+import torch
+from aepsych.config import Config
+from aepsych.models.base import AEPsychModelMixin
+from aepsych.utils import _process_bounds
+from aepsych.generators.base import AcqfGenerator
+from botorch.acquisition import AcquisitionFunction
+from loguru import logger
+
+
+class CustomPoolBasedGenerator(AcqfGenerator):
+    """
+    Generator that samples from a predefined pool of points using acquisition functions.
+
+    This generator is designed for pool-based active learning where you have a fixed
+    set of candidate points. It uses acquisition functions to intelligently select
+    the most informative points from the pool based on model uncertainty or other
+    criteria defined by the acquisition function.
+
+    When a model is available, the generator evaluates the acquisition function on all
+    available points in the pool and selects the ones with the highest acquisition
+    values. When no model is available, it falls back to sequential or random selection.
+
+    Attributes:
+        pool_points (torch.Tensor): The pool of candidate points to sample from.
+        lb (torch.Tensor): Lower bounds of each parameter.
+        ub (torch.Tensor): Upper bounds of each parameter.
+        dim (int): Dimensionality of the parameter space.
+        acqf (AcquisitionFunction): Acquisition function to use for point selection.
+        acqf_kwargs (dict): Additional arguments for the acquisition function.
+        allow_resampling (bool): Whether to allow resampling of already used points.
+        shuffle (bool): Whether to shuffle the pool initially (used when no model).
+        seed (int, optional): Random seed for reproducibility.
+    """
+
+    _requires_model = True  # Changed to True since we use acquisition functions
+
+    def __init__(
+        self,
+        lb: torch.Tensor,
+        ub: torch.Tensor,
+        pool_points: torch.Tensor,
+        acqf: AcquisitionFunction,
+        acqf_kwargs: Optional[dict[str, Any]] = None,
+        dim: Optional[int] = None,
+        allow_resampling: bool = False,
+        shuffle: bool = True,
+        seed: Optional[int] = None,
+        dedup_database_path: Optional[str] = None,
+    ) -> None:
+        """
+        Initialize PoolBasedGenerator.
+
+        Args:
+            lb (torch.Tensor): Lower bounds of each parameter.
+            ub (torch.Tensor): Upper bounds of each parameter.
+            pool_points (torch.Tensor): The pool of candidate points [n_points x dim].
+            acqf (AcquisitionFunction): Acquisition function to use for point selection.
+            acqf_kwargs (dict, optional): Extra arguments for the acquisition function.
+            dim (int, optional): Dimensionality of the parameter space.
+                If None, it is inferred from lb and ub.
+            allow_resampling (bool): Whether to allow resampling of already used points.
+                Default is False.
+            shuffle (bool): Whether to shuffle the pool initially (used when no model
+                is available). Default is True.
+            seed (int, optional): Random seed for reproducibility. Defaults to None.
+            dedup_database_path (str, tuple, or None, optional): Deduplication database configuration.
+                - If str: Full path to SQLite database file (Mode 1: Manual specification)
+                - If tuple: Auto-generate path from (subject_id, run_id) or (subject_id, run_id, save_dir)
+                  Examples: ("subject_A", "run001") → ./data/subject_A_run001_dedup.db
+                            ("subject_A", "run001", "./custom") → ./custom/subject_A_run001_dedup.db
+                  (Mode 3: Auto-naming with optional custom directory)
+                - If None: Temporary in-memory database, auto-cleaned after run (Mode 2)
+                Default is None.
+        """
+        super().__init__(acqf=acqf, acqf_kwargs=acqf_kwargs)
+        self.seed = seed
+        self.lb, self.ub, self.dim = _process_bounds(lb, ub, dim)
+        self.allow_resampling = allow_resampling
+
+        # 【新增】初始化去重数据库
+        self.dedup_database_path = dedup_database_path
+        self._dedup_conn = None
+        self._is_temp_db = False  # 标记是否为临时数据库
+        self._initialize_dedup_database()
+
+        # 【新增】缓存采集函数实例，确保诊断信息的一致性
+        self._acqf_instance = None
+        self._acqf_instance_model = None
+        self._last_model_train_size = None  # 追踪模型训练样本数,用于检测refit
+        self._last_train_tensor_id = (
+            None  # 追踪train_inputs[0]的tensor ID,更可靠的refit检测
+        )
+
+        # Validate pool_points
+        if pool_points is None or len(pool_points) == 0:
+            raise ValueError("pool_points must be a non-empty tensor")
+
+        # Convert to tensor if needed
+        if not isinstance(pool_points, torch.Tensor):
+            pool_points = torch.tensor(pool_points, dtype=torch.float32)
+
+        # Ensure pool_points is 2D
+        if len(pool_points.shape) == 1:
+            pool_points = pool_points.unsqueeze(0)
+
+        # Check dimensionality
+        if pool_points.shape[1] != self.dim:
+            raise ValueError(
+                f"pool_points dimensionality ({pool_points.shape[1]}) "
+                f"does not match specified dim ({self.dim})"
+            )
+
+        # Optionally shuffle the pool
+        if shuffle:
+            if seed is not None:
+                torch.manual_seed(seed)
+            perm = torch.randperm(len(pool_points))
+            pool_points = pool_points[perm]
+
+        self.pool_points = pool_points
+        self._used_indices = set()
+        self._historical_points = set()  # 【新增】存储持久化的历史采样点
+
+        # Server instance for database access
+        self._aepsych_server = None
+        self._current_idx = 0
+        self.max_asks = len(self.pool_points) if not allow_resampling else None
+
+    def gen(
+        self,
+        num_points: int = 1,
+        model: Optional[AEPsychModelMixin] = None,
+        fixed_features: Optional[dict[int, float]] = None,
+        **kwargs,
+    ) -> torch.Tensor:
+        """
+        Query next point(s) from the pool using acquisition function.
+
+        Uses the acquisition function to evaluate all available points in the pool
+        and selects the ones with the highest acquisition values. This enables
+        intelligent point selection based on model uncertainty or other criteria.
+
+        Args:
+            num_points (int): Number of points to query. Defaults to 1.
+            model (AEPsychModelMixin): Fitted model to use for acquisition function evaluation.
+            fixed_features (dict[int, float], optional): Fixed features for generation.
+                Currently not supported for PoolBasedGenerator.
+            **kwargs: Additional arguments (ignored, for API compatibility).
+
+        Returns:
+            torch.Tensor: Next set of point(s) to evaluate [num_points x dim].
+
+        Raises:
+            RuntimeError: If pool is exhausted and resampling is not allowed.
+        """
+        if fixed_features is not None and len(fixed_features) != 0:
+            logger.warning(
+                f"Cannot fix features when generating from {self.__class__.__name__}"
+            )
+
+        # 【新增】历史点排除功能：防止重复采样已训练过的点
+        # 系统级自动获取采样历史，无需外部调用
+        excluded_count = 0
+        sampling_history = self._get_sampling_history_from_server()
+        if sampling_history is not None and len(sampling_history) > 0:
+            excluded_count = self._exclude_historical_points_from_history(
+                sampling_history
+            )
+            if excluded_count > 0:
+                logger.info(f"[PoolGen] 已排除 {excluded_count} 个新的历史采样点")
+
+        # Get available points
+        available_indices = self._get_available_indices()
+
+        if len(available_indices) == 0:
+            if self.allow_resampling:
+                # Reset and allow resampling
+                logger.info("Pool exhausted, resampling from beginning")
+                self._used_indices.clear()
+                self._current_idx = 0
+                available_indices = self._get_available_indices()
+            else:
+                raise RuntimeError(
+                    f"Pool exhausted! Requested {num_points} points but pool is empty. "
+                    "Set allow_resampling=True to enable resampling."
+                )
+
+        # Limit num_points to available points
+        actual_num_points = min(num_points, len(available_indices))
+        if actual_num_points < num_points:
+            logger.warning(
+                f"Requested {num_points} points but only {actual_num_points} available in pool. "
+                f"Returning {actual_num_points} points."
+            )
+
+        available_points = self.pool_points[available_indices]
+
+        # If model is provided, use acquisition function to select points
+        if model is not None:
+            model.eval()
+
+            # 【调试】检查收到的 model
+            import sys
+
+            if hasattr(model, "train_inputs") and model.train_inputs:
+                print(
+                    f"[PoolGen.gen] Received model_id={id(model)}, train_inputs[0].shape={model.train_inputs[0].shape}",
+                    file=sys.stderr,
+                )
+                if hasattr(model, "_base_obj"):
+                    print(
+                        f"[PoolGen.gen] model._base_obj id={id(model._base_obj)}, _base_obj._train_inputs[0].shape={model._base_obj._train_inputs[0].shape}",
+                        file=sys.stderr,
+                    )
+
+            # Move points to model device if needed
+            if hasattr(model, "device"):
+                available_points = available_points.to(model.device)
+
+            # 【修复】智能acqf缓存：只在model refit时重新创建
+            # 检测model是否refit：比较训练样本数
+            current_train_size = (
+                model.train_inputs[0].shape[0]
+                if hasattr(model, "train_inputs") and model.train_inputs
+                else 0
+            )
+            logger.debug(
+                f"[PoolGen] model_id={id(model)}, train_inputs[0]_id={id(model.train_inputs[0]) if hasattr(model, 'train_inputs') and model.train_inputs else 'None'}, current_train_size={current_train_size}, _last_model_train_size={self._last_model_train_size}"
+            )
+            need_recreate = (
+                self._acqf_instance is None
+                or self._last_model_train_size is None
+                or current_train_size != self._last_model_train_size
+            )
+            logger.debug(
+                f"[PoolGen] need_recreate={need_recreate}, _acqf_instance={'None' if self._acqf_instance is None else type(self._acqf_instance).__name__}"
+            )
+
+            if need_recreate:
+                # 【关键修复】在重新创建acqf之前，保存旧weight_engine的r_t状态
+                # 这样新acqf可以继承历史参数变化信息，实现r_t的正确追踪
+                old_weight_engine_state = None
+                old_sps_tracker_state = None
+                if self._acqf_instance is not None and hasattr(
+                    self._acqf_instance, "weight_engine"
+                ):
+                    old_we = self._acqf_instance.weight_engine
+                    old_weight_engine_state = {
+                        "_prev_core_params": getattr(old_we, "_prev_core_params", None),
+                        "_initial_param_norm": getattr(
+                            old_we, "_initial_param_norm", None
+                        ),
+                        "_r_t_smoothed": getattr(old_we, "_r_t_smoothed", None),
+                        "_cached_r_t": getattr(old_we, "_cached_r_t", None),
+                        "_cached_r_t_n_train": getattr(
+                            old_we, "_cached_r_t_n_train", -1
+                        ),
+                    }
+                    # 保存SPS tracker状态（如果存在）
+                    if (
+                        hasattr(old_we, "sps_tracker")
+                        and old_we.sps_tracker is not None
+                    ):
+                        old_sps_tracker_state = {
+                            "prev_predictions": getattr(
+                                old_we.sps_tracker, "prev_predictions", None
+                            ),
+                            "r_t_smoothed": getattr(
+                                old_we.sps_tracker, "r_t_smoothed", None
+                            ),
+                        }
+                    logger.debug(
+                        f"[PoolGen] Saved old weight_engine state: _r_t_smoothed={old_weight_engine_state['_r_t_smoothed']}, sps_state={'exists' if old_sps_tracker_state else 'None'}"
+                    )
+
+                acqf = self._instantiate_acquisition_fn(model)
+                self._acqf_instance = acqf
+                self._last_model_train_size = current_train_size
+
+                # 【关键修复】恢复weight_engine状态到新acqf
+                if old_weight_engine_state is not None and hasattr(
+                    acqf, "weight_engine"
+                ):
+                    new_we = acqf.weight_engine
+                    # 恢复_prev_core_params以计算参数变化率
+                    # 这是r_t追踪的基础，没有这个状态r_t永远从1.0开始
+                    if old_weight_engine_state["_prev_core_params"] is not None:
+                        new_we._prev_core_params = old_weight_engine_state[
+                            "_prev_core_params"
+                        ]
+                    if old_weight_engine_state["_initial_param_norm"] is not None:
+                        new_we._initial_param_norm = old_weight_engine_state[
+                            "_initial_param_norm"
+                        ]
+                    # 恢复_r_t_smoothed以维持EMA平滑的连续性
+                    if old_weight_engine_state["_r_t_smoothed"] is not None:
+                        new_we._r_t_smoothed = old_weight_engine_state["_r_t_smoothed"]
+
+                    # 恢复SPS tracker状态（如果存在）
+                    if (
+                        old_sps_tracker_state is not None
+                        and hasattr(new_we, "sps_tracker")
+                        and new_we.sps_tracker is not None
+                    ):
+                        if old_sps_tracker_state["prev_predictions"] is not None:
+                            new_we.sps_tracker.prev_predictions = old_sps_tracker_state[
+                                "prev_predictions"
+                            ]
+                        if old_sps_tracker_state["r_t_smoothed"] is not None:
+                            new_we.sps_tracker.r_t_smoothed = old_sps_tracker_state[
+                                "r_t_smoothed"
+                            ]
+
+                    logger.debug(
+                        f"[PoolGen] Restored weight_engine state: _prev_core_params={'exists' if new_we._prev_core_params is not None else 'None'}, _r_t_smoothed={new_we._r_t_smoothed}"
+                    )
+
+                # 同步训练状态
+                if hasattr(acqf, "weight_engine"):
+                    acqf.weight_engine.update_training_status(
+                        current_train_size, fitted=True
+                    )
+                logger.debug(
+                    f"[PoolGen] Created new acqf, train_size={current_train_size}, synced weight_engine"
+                )
+            else:
+                acqf = self._acqf_instance
+                # Update weight_engine with current training status
+                if hasattr(acqf, "weight_engine"):
+                    acqf.weight_engine.update_training_status(
+                        current_train_size, fitted=True
+                    )
+                logger.debug(
+                    f"[PoolGen] Reusing cached acqf, train_size={current_train_size}"
+                )
+
+            # Evaluate acquisition function on all available points
+            with torch.no_grad():
+                # Acquisition functions expect (batch_size, q, dim) for batch evaluation
+                # We evaluate each point individually
+                acqf_values = []
+                for point in available_points:
+                    # Reshape to (1, 1, dim) for single point evaluation
+                    point_reshaped = point.unsqueeze(0).unsqueeze(0)
+                    try:
+                        acqf_value = acqf(point_reshaped)
+                        acqf_values.append(acqf_value.item())
+                    except Exception as e:
+                        # If acquisition function fails, use 0 as fallback
+                        logger.warning(
+                            f"Acquisition function evaluation failed for point {point}: {e}"
+                        )
+                        acqf_values.append(0.0)
+
+                acqf_values = torch.tensor(acqf_values)
+
+            # Select points with highest acquisition values
+            _, top_indices = torch.topk(acqf_values, k=actual_num_points, largest=True)
+            selected_pool_indices = available_indices[top_indices]
+            selected_points = self.pool_points[selected_pool_indices]
+
+            logger.debug(
+                "PoolBasedGenerator used=%d available=%d picked=%s",
+                len(self._used_indices),
+                len(available_indices),
+                selected_pool_indices.tolist(),
+            )
+
+            # 计算总的已使用点数（包括刚选中的点）
+            total_used = len(self._used_indices)
+            logger.info(
+                f"[PoolGen] 选中 {actual_num_points} 个点: 索引={selected_pool_indices.tolist()}, "
+                f"总已用点={total_used}个, 剩余={len(self.pool_points)-total_used}个, "
+                f"采集函数={self.acqf.__name__}"
+            )
+        else:
+            # Fallback: sequential selection if no model (shouldn't happen with _requires_model=True)
+            logger.warning("No model provided, using sequential selection")
+            selected_pool_indices = available_indices[:actual_num_points]
+            selected_points = available_points[:actual_num_points]
+
+        # Mark as used
+        self._used_indices.update(selected_pool_indices.tolist())
+
+        # Store the last selected indices for external access
+        self.last_selected_indices = selected_pool_indices.tolist()
+
+        logger.debug(
+            "PoolBasedGenerator used_indices now=%s",
+            sorted(self._used_indices),
+        )
+
+        # 【新增】记录选中的点到去重数据库
+        self._record_points_to_dedup_db(selected_points)
+
+        return selected_points
+
+    def _record_points_to_dedup_db(self, points: torch.Tensor) -> None:
+        """
+        将选中的采样点记录到去重数据库。
+
+        Args:
+            points (torch.Tensor): 选中的采样点 [num_points x dim]
+        """
+        try:
+            if not self._dedup_conn:
+                return
+
+            if points.shape[0] == 0:
+                return
+
+            # 获取当前最大的 iteration_id
+            cursor = self._dedup_conn.execute(
+                "SELECT MAX(iteration_id) FROM param_data"
+            )
+            max_iter = cursor.fetchone()[0]
+            next_iter = (max_iter or 0) + 1
+
+            # 对于每个点，逐一参数插入数据库
+            # 这里假设参数维度与 dim 对应
+            points_np = points.cpu().numpy() if points.is_cuda else points.numpy()
+
+            for point_idx, point in enumerate(points_np):
+                current_iter = next_iter + point_idx
+                point_tuple = tuple(point)
+
+                # 为每个维度创建一个参数条目
+                for dim_idx, value in enumerate(point):
+                    param_name = f"param_{dim_idx}"  # 标准参数名称
+
+                    self._dedup_conn.execute(
+                        "INSERT INTO param_data (param_name, param_value, iteration_id) VALUES (?, ?, ?)",
+                        (param_name, float(value), current_iter),
+                    )
+
+                # 更新内存中的历史点集合
+                self._historical_points.add(point_tuple)
+
+            self._dedup_conn.commit()
+            logger.debug(f"[DedupDB] 记录了 {points.shape[0]} 个点到去重数据库")
+
+        except Exception as e:
+            logger.error(f"[DedupDB] 记录点失败: {e}")
+
+    def _generate_db_path(self, config_value) -> str:
+        """
+        根据配置值生成数据库路径（仅用于模式3）。
+
+        Args:
+            config_value: 元组格式 (subject_id, run_id) 或 (subject_id, run_id, save_dir)
+
+        Returns:
+            生成的数据库路径
+        """
+        if isinstance(config_value, (list, tuple)):
+            if len(config_value) == 2:
+                subject_id, run_id = config_value
+                save_dir = "./data"
+            elif len(config_value) == 3:
+                subject_id, run_id, save_dir = config_value
+            else:
+                raise ValueError(
+                    f"元组必须包含 2 或 3 个元素，收到: {len(config_value)}"
+                )
+
+            # 生成路径: {save_dir}/{subject_id}_{run_id}_dedup.db
+            db_path = Path(save_dir) / f"{subject_id}_{run_id}_dedup.db"
+            return str(db_path)
+        else:
+            raise ValueError(f"无法解析配置值类型 {type(config_value)}: {config_value}")
+
+    def _initialize_dedup_database(self) -> None:
+        """
+        初始化去重数据库，支持三种模式。
+
+        模式1: 手动路径（字符串）- 持久化 SQLite
+        模式2: None - 临时内存数据库
+        模式3: 元组 - 自动生成路径名
+        """
+        try:
+            if self.dedup_database_path is None:
+                # 【模式2】未指定 - 创建临时内存数据库，仅供当前运行使用
+                self._dedup_conn = sqlite3.connect(":memory:")
+                self._is_temp_db = True
+                logger.info("[DedupDB] 模式2: 使用临时内存数据库（仅限当前运行）")
+
+            elif isinstance(self.dedup_database_path, str):
+                # 【模式1】手动指定路径（字符串）- 创建或连接到持久化数据库
+                db_path = Path(self.dedup_database_path)
+                db_path.parent.mkdir(parents=True, exist_ok=True)
+
+                # 删除旧文件并创建新的
+                if db_path.exists():
+                    db_path.unlink()
+                    logger.info(f"[DedupDB] 删除旧数据库: {db_path}")
+
+                self._dedup_conn = sqlite3.connect(str(db_path))
+                self._is_temp_db = False
+                logger.info(f"[DedupDB] 模式1: 使用持久化数据库: {db_path}")
+
+            elif isinstance(self.dedup_database_path, (list, tuple)):
+                # 【模式3】元组格式自动生成路径 - 持久化 SQLite
+                db_path_str = self._generate_db_path(self.dedup_database_path)
+                db_path = Path(db_path_str)
+                db_path.parent.mkdir(parents=True, exist_ok=True)
+
+                # 删除旧文件并创建新的
+                if db_path.exists():
+                    db_path.unlink()
+                    logger.info(f"[DedupDB] 删除旧数据库: {db_path}")
+
+                self._dedup_conn = sqlite3.connect(str(db_path))
+                self._is_temp_db = False
+                logger.info(f"[DedupDB] 模式3: 使用自动命名数据库: {db_path}")
+            else:
+                raise ValueError(
+                    f"dedup_database_path 必须是 str、tuple 或 None，"
+                    f"收到: {type(self.dedup_database_path)}"
+                )
+
+            # 创建标准 param_data 表（遵循 AEPsych 架构）
+            self._dedup_conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS param_data (
+                    param_name TEXT NOT NULL,
+                    param_value REAL NOT NULL,
+                    iteration_id INTEGER
+                )
+                """
+            )
+            self._dedup_conn.commit()
+            logger.debug("[DedupDB] param_data 表初始化完成")
+
+            # 加载历史点
+            self._load_historical_points_from_dedup_db()
+
+        except Exception as e:
+            logger.error(f"[DedupDB] 初始化失败: {e}")
+            # 回退到内存数据库
+            self._dedup_conn = sqlite3.connect(":memory:")
+            self._is_temp_db = True
+            logger.warning("[DedupDB] 回退到临时内存数据库")
+
+    def _load_historical_points_from_dedup_db(self) -> None:
+        """
+        从去重数据库加载历史采样点。
+
+        将参数表中的所有历史点加载到内存，用于采样时排除。
+        Points 以排序参数元组的形式存储，便于快速匹配。
+        """
+        try:
+            if not self._dedup_conn:
+                return
+
+            cursor = self._dedup_conn.execute(
+                "SELECT DISTINCT param_name, param_value FROM param_data ORDER BY param_name"
+            )
+
+            # 分组参数：按 param_name 组织
+            params_dict = {}
+            for param_name, param_value in cursor.fetchall():
+                # 参数名可能被引号包裹，需要清理
+                clean_name = param_name.strip("'\"")
+                if clean_name not in params_dict:
+                    params_dict[clean_name] = []
+                params_dict[clean_name].append(param_value)
+
+            # 重构历史点集合（每个参数值组合视为一个点）
+            # 这里简化：将所有 param_value 视为点的分量
+            historical_points_set = set()
+
+            # 获取所有行，按 iteration_id 分组
+            cursor = self._dedup_conn.execute(
+                "SELECT param_name, param_value, iteration_id FROM param_data ORDER BY iteration_id, param_name"
+            )
+
+            current_iteration = None
+            current_point_tuple = []
+
+            for param_name, param_value, iteration_id in cursor.fetchall():
+                if iteration_id != current_iteration:
+                    if current_point_tuple:
+                        historical_points_set.add(tuple(sorted(current_point_tuple)))
+                    current_iteration = iteration_id
+                    current_point_tuple = []
+
+                current_point_tuple.append(param_value)
+
+            # 添加最后一个点
+            if current_point_tuple:
+                historical_points_set.add(tuple(sorted(current_point_tuple)))
+
+            self._historical_points = historical_points_set
+            logger.info(f"[DedupDB] 加载了 {len(historical_points_set)} 个历史采样点")
+
+        except Exception as e:
+            logger.error(f"[DedupDB] 加载历史点失败: {e}")
+            self._historical_points = set()
+
+    def _get_available_indices(self) -> torch.Tensor:
+        """
+        Get indices of points that haven't been used yet AND are not in historical points.
+
+        Returns:
+            torch.Tensor: Tensor of available indices.
+        """
+        all_indices = torch.arange(len(self.pool_points))
+
+        # 排除当前运行中已使用的点
+        excluded_mask = torch.ones(len(self.pool_points), dtype=torch.bool)
+        if len(self._used_indices) > 0:
+            used_tensor = torch.tensor(list(self._used_indices))
+            excluded_mask[used_tensor] = False
+
+        available_after_used = all_indices[excluded_mask]
+
+        # 【新增】排除历史点（来自持久化数据库）
+        if len(self._historical_points) > 0:
+            # 对剩余的可用点，检查是否在历史点中
+            available_points = self.pool_points[available_after_used]
+            points_np = (
+                available_points.cpu().numpy()
+                if available_points.is_cuda
+                else available_points.numpy()
+            )
+
+            historical_mask = torch.ones(len(available_points), dtype=torch.bool)
+            for i, point in enumerate(points_np):
+                point_tuple = tuple(sorted(point))
+                if point_tuple in self._historical_points:
+                    historical_mask[i] = False
+                    logger.debug(f"[DedupDB] 排除历史点: {point_tuple}")
+
+            # 结合两个掩码：既不在 _used_indices 中，也不在历史点中
+            available_indices = available_after_used[historical_mask]
+        else:
+            available_indices = available_after_used
+
+        return available_indices
+
+    @classmethod
+    @classmethod
+    def get_config_options(
+        cls,
+        config: Config,
+        name: Optional[str] = None,
+        options: Optional[dict[str, Any]] = None,
+    ) -> dict[str, Any]:
+        """
+        Extract configuration options for the generator from a Config object.
+
+        Args:
+            config (Config): Config object to extract options from.
+            name (str, optional): Name of the generator section in config.
+            options (dict[str, Any], optional): Existing options to update.
+
+        Returns:
+            dict[str, Any]: Dictionary of options to initialize the generator.
+        """
+        # Fix: Pre-populate acqf if it's not in options yet
+        # This prevents KeyError when parent class tries to access options["acqf"]
+        if options is None:
+            options = {}
+
+        name = name or cls.__name__
+
+        # Read acqf from config if not already in options
+        if "acqf" not in options:
+            try:
+                acqf_class = config.getobj(name, "acqf")
+                options["acqf"] = acqf_class
+            except Exception:
+                # Provide default acquisition function
+                from botorch.acquisition import qUpperConfidenceBound
+
+                options["acqf"] = qUpperConfidenceBound
+
+        options = super().get_config_options(config, name, options)
+
+        # Handle potential shape issues with pool_points from config
+        if "pool_points" in options:
+            pool_points = options["pool_points"]
+            if len(pool_points.shape) == 3:
+                # Configs have a reasonable natural input method that produces incorrect tensors
+                options["pool_points"] = pool_points.swapaxes(-1, -2).squeeze(0)
+
+        # 【新增】处理 dedup_database_path 参数
+        if "dedup_database_path" not in options:
+            try:
+                dedup_db_path = config.getstr(
+                    name, "dedup_database_path", fallback=None
+                )
+                if dedup_db_path and dedup_db_path.lower() != "none":
+                    options["dedup_database_path"] = dedup_db_path
+                    logger.info(f"[Config] 使用手动指定的去重数据库: {dedup_db_path}")
+                else:
+                    options["dedup_database_path"] = None
+                    logger.info("[Config] 使用临时内存去重数据库")
+            except Exception:
+                options["dedup_database_path"] = None
+
+        return options
+
+    @property
+    def finished(self) -> bool:
+        """
+        Check if the generator has exhausted its pool.
+
+        Returns:
+            bool: True if pool is exhausted and resampling is not allowed, False otherwise.
+        """
+        if self.allow_resampling:
+            return False
+        return len(self._used_indices) >= len(self.pool_points)
+
+    def reset(self) -> None:
+        """Reset the generator to its initial state, clearing used indices."""
+        self._used_indices.clear()
+        self._current_idx = 0
+        logger.info("PoolBasedGenerator reset - all points available again")
+
+    def __del__(self):
+        """析构函数：关闭数据库连接"""
+        self._close_dedup_database()
+
+    def _close_dedup_database(self) -> None:
+        """关闭去重数据库连接"""
+        try:
+            if self._dedup_conn:
+                self._dedup_conn.close()
+                self._dedup_conn = None
+        except Exception as e:
+            logger.debug(f"[DedupDB] 关闭数据库时出错: {e}")
+
+    def get_acqf_instance(self):
+        """【新增】获取缓存的采集函数实例（用于诊断）"""
+        return self._acqf_instance
+
+    def _exclude_historical_points_from_history(
+        self, sampling_history: torch.Tensor
+    ) -> int:
+        """
+        从采样历史中排除已使用的历史点
+
+        Args:
+            sampling_history: 采样历史张量 [n_points, n_dim]，包含原始坐标
+
+        Returns:
+            int: 排除的历史点数量
+        """
+        if sampling_history is None or len(sampling_history) == 0:
+            return 0
+
+        logger.debug(f"[PoolGen] 检查采样历史中的 {len(sampling_history)} 个点")
+
+        # 将历史采样点匹配到设计空间索引
+        excluded_indices = self._match_points_to_pool_indices(sampling_history)
+
+        # 更新已使用索引集合
+        original_used_count = len(self._used_indices)
+        self._used_indices.update(excluded_indices)
+        newly_excluded = len(self._used_indices) - original_used_count
+
+        if newly_excluded > 0:
+            logger.debug(f"[PoolGen] 新排除历史点索引: {sorted(excluded_indices)}")
+
+        return newly_excluded
+
+    def _get_sampling_history_from_server(self) -> torch.Tensor:
+        """
+        系统级自动获取AEPsych服务器的采样历史
+
+        通过反向查找获取服务器实例，并从数据库中读取原始采样坐标
+        这样即使只通过INI配置也能自动工作
+
+        Returns:
+            torch.Tensor: 采样历史张量 [n_points, n_dim] 或 None
+        """
+        try:
+            # 尝试获取服务器实例 - 通过多种方式查找
+            server = self._find_aepsych_server()
+            if server is None:
+                logger.debug("[PoolGen] 无法找到AEPsych服务器实例")
+                return None
+
+            # 从服务器数据库获取采样历史
+            import sqlite3
+            import pandas as pd
+
+            if not hasattr(server, "db") or server.db is None:
+                logger.debug("[PoolGen] 服务器无数据库连接")
+                return None
+
+            # 查询原始采样数据 - 使用实际表名 param_data
+            query = """
+            SELECT param_name, param_value, iteration_id 
+            FROM param_data 
+            ORDER BY iteration_id, param_name
+            """
+
+            result = server.db.execute_sql_query(query, {})
+            rows = result
+
+            if not rows:
+                logger.debug("[PoolGen] 数据库中无采样历史")
+                return None
+
+            # 解析为坐标格式
+            param_dict = {}
+            for param_name, param_value, iteration_id in rows:
+                # 清理参数名的引号（数据库中参数名带引号）
+                clean_param_name = param_name.strip("'\"")
+
+                if iteration_id not in param_dict:
+                    param_dict[iteration_id] = {}
+                param_dict[iteration_id][clean_param_name] = float(param_value)
+
+            # 转换为张量格式 [n_trials, n_dim]
+            if not param_dict:
+                return None
+
+            iteration_ids = sorted(param_dict.keys())
+            param_names = (
+                sorted(param_dict[iteration_ids[0]].keys()) if iteration_ids else []
+            )
+
+            if not param_names:
+                return None
+
+            sampling_data = []
+            for iteration_id in iteration_ids:
+                point = [
+                    param_dict[iteration_id].get(pname, 0.0) for pname in param_names
+                ]
+                sampling_data.append(point)
+
+            if sampling_data:
+                sampling_history = torch.tensor(sampling_data, dtype=torch.float32)
+                logger.debug(
+                    f"[PoolGen] 从服务器获取到 {len(sampling_history)} 个历史采样点"
+                )
+                return sampling_history
+
+        except Exception as e:
+            logger.debug(f"[PoolGen] 获取采样历史失败: {e}")
+
+        return None
+
+    def _find_aepsych_server(self):
+        """
+        智能查找AEPsych服务器实例
+
+        通过多种方式尝试定位当前运行的服务器实例
+
+        Returns:
+            AEPsychServer实例或None
+        """
+        # 优先使用手动设置的服务器实例
+        if self._aepsych_server is not None:
+            logger.debug(f"[PoolGen] 使用手动设置的服务器实例")
+            return self._aepsych_server
+
+        try:
+            # 方法1: 通过全局变量查找
+            import sys
+
+            for name, obj in sys.modules.items():
+                if hasattr(obj, "__dict__"):
+                    for attr_name, attr_val in obj.__dict__.items():
+                        if (
+                            hasattr(attr_val, "db")
+                            and hasattr(attr_val, "handle_request")
+                            and "AEPsychServer" in str(type(attr_val))
+                        ):
+                            logger.debug(
+                                f"[PoolGen] 通过模块 {name}.{attr_name} 找到服务器"
+                            )
+                            return attr_val
+
+            # 方法2: 通过调用栈查找
+            import inspect
+
+            for frame_info in inspect.stack():
+                frame_locals = frame_info.frame.f_locals
+                frame_globals = frame_info.frame.f_globals
+
+                # 检查局部变量
+                for var_name, var_val in frame_locals.items():
+                    if (
+                        hasattr(var_val, "db")
+                        and hasattr(var_val, "handle_request")
+                        and "AEPsychServer" in str(type(var_val))
+                    ):
+                        logger.debug(
+                            f"[PoolGen] 通过调用栈局部变量 {var_name} 找到服务器"
+                        )
+                        return var_val
+
+                # 检查全局变量
+                for var_name, var_val in frame_globals.items():
+                    if (
+                        hasattr(var_val, "db")
+                        and hasattr(var_val, "handle_request")
+                        and "AEPsychServer" in str(type(var_val))
+                    ):
+                        logger.debug(
+                            f"[PoolGen] 通过调用栈全局变量 {var_name} 找到服务器"
+                        )
+                        return var_val
+
+        except Exception as e:
+            logger.debug(f"[PoolGen] 查找服务器失败: {e}")
+
+        return None
+
+    def set_aepsych_server(self, server):
+        """直接设置AEPsych服务器实例用于数据库访问"""
+        self._aepsych_server = server
+        logger.debug(f"[PoolGen] 手动设置服务器实例: {type(server)}")
+
+    def _match_points_to_pool_indices(self, train_points: torch.Tensor) -> set[int]:
+        """
+        将训练点匹配到池中对应的索引
+
+        Args:
+            train_points: 训练点张量 [n_points, n_dim]
+
+        Returns:
+            set[int]: 匹配到的池索引集合
+        """
+        matched_indices = set()
+        tolerance = 1e-6  # 浮点数比较容差
+
+        for train_point in train_points:
+            # 计算与池中所有点的距离
+            distances = torch.norm(self.pool_points - train_point.unsqueeze(0), dim=1)
+            min_distance, closest_idx = torch.min(distances, dim=0)
+
+            # 如果距离足够小，认为是匹配的点
+            if min_distance.item() < tolerance:
+                matched_indices.add(closest_idx.item())
+                logger.debug(
+                    f"[PoolGen] 匹配: 训练点 {train_point.tolist()[:3]}... -> 池索引 {closest_idx.item()} (距离: {min_distance.item():.2e})"
+                )
+            else:
+                logger.warning(
+                    f"[PoolGen] 未匹配: 训练点 {train_point.tolist()[:3]}... (最小距离: {min_distance.item():.2e})"
+                )
+
+        return matched_indices
+
+
+# Register the CustomPoolBasedGenerator with the Config system
+Config.register_object(CustomPoolBasedGenerator)

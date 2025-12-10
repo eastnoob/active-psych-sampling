@@ -18,6 +18,8 @@ AEPsych 使用 `ast.literal_eval()` 解析 INI 值 → **只接受 Python 字面
 | **结果类型** | `outcome_types = ['continuous']` | `outcome_types = [continuous]` | 裸标识符,非字符串 |
 | **参数名列表** | `parnames = [x1_Height, x2_Width]` | `parnames = ['x1_Height', 'x2_Width']` | 参数名**需要**引号 |
 | **类别值** | `choices = [Chaos, Rotated]` | `choices = ['Chaos', 'Rotated']` | 字符串值需要引号 |
+| **Categorical 数值** | `choices = ['2.8', '4.0', '8.5']` | `choices = [2.8, 4.0, 8.5]` | 数值不需引号 |
+| **Categorical lb/ub** | `lb = [2.8, 6.5], ub = [8.5, 8.0]` | `lb = [0, 0], ub = [2, 1]` | ⚠️ **必须用 indices** |
 | **离散参数键** | `discrete_params = {x1_Height: 3}` | `discrete_params = {'x1_Height': 3}` | 字典键需要引号 |
 | **数值列表** | `lb = [0, 0, 0]` | `lb = [0, 0, 0]` | 数值不需引号 |
 | **采样点** | `points = [[2.8, 'Strict']]` | `points = [[2.8, 2]]` | 类别参数用数值索引 |
@@ -93,30 +95,77 @@ lb = [0, 0, 0, 0, 0, 0]
 ub = [2, 1, 2, 2, 1, 2]
 ```
 
+### 错误 10: Categorical Numeric Parameters Double Transformation ⚠️ **重要**
+**症状**: AEPsych 返回超出范围的值 (如 `17.0`, `51.2` 而不是 `2.8`, `4.0`, `8.5`)
+**根因**: `lb/ub` 配置为 actual values 而不是 indices，导致 double/triple transformation
+**修复**: **Categorical numeric parameters 必须遵循以下配置规则**:
+
+```ini
+# ✅ 正确配置
+[common]
+lb = [0, 0, ...]  # ← 必须用 indices (从 0 开始)
+ub = [2, 1, ...]  # ← 必须用 indices (choices 数量 - 1)
+
+[x1_CeilingHeight]
+par_type = categorical
+choices = [2.8, 4.0, 8.5]  # ← 用 actual values
+lb = 0  # ← index (可选，会被 [common] 覆盖)
+ub = 2  # ← index (len(choices) - 1)
+
+[ManualGenerator]
+points = [[2.8, 6.5, ...]]  # ← 用 actual values
+```
+
+```ini
+# ❌ 错误配置 (会导致 2.8 → 17.0 bug)
+[common]
+lb = [2.8, 6.5, ...]  # ❌ 不能用 actual values
+ub = [8.5, 8.0, ...]  # ❌ 不能用 actual values
+```
+
+**为什么**: AEPsych 内部使用 indices 进行归一化/缩放计算，如果 lb/ub 配置为 actual values，会把 actual value 当作 normalized value 再次变换，导致数据损坏。
+
+**验证方法**: 运行实验后检查 `debug/aepsych_validation.log`，返回值应该在 `choices` 范围内，不应出现 `17.0`, `51.2` 等异常值。如果出现超出范围的值，说明 lb/ub 配置错误。
+
+**相关修复**: 已在 `tools/repair/parameter_transform_skip/` 提供根本性修复补丁。
+
 ---
 
 ## 完整配置模板
 
 ```ini
 [common]
-parnames = ['x1_Height', 'x2_Width', 'x3_Type']  # ✅ 参数名需引号
+parnames = ['x1_CeilingHeight', 'x2_GridModule', 'x3_Type']  # ✅ 参数名需引号
 stimuli_per_trial = 1
 outcome_types = [continuous]  # ✅ 裸标识符
 strategy_names = [init_strat, opt_strat]  # ✅ 裸标识符
-lb = [0, 0, 0]
-ub = [2, 1, 2]
+lb = [0, 0, 0]  # ✅ Categorical 参数用 indices (从 0 开始)
+ub = [2, 1, 2]  # ✅ Indices (choices 数量 - 1)
 
-[x3_Type]
+[x1_CeilingHeight]  # Categorical numeric parameter
 par_type = categorical
-choices = ['Chaos', 'Rotated', 'Strict']  # ✅ 字符串值需引号
+choices = [2.8, 4.0, 8.5]  # ✅ Actual values (3 个选项)
+lb = 0  # ← Index (可选)
+ub = 2  # ← Index = len(choices) - 1
+
+[x2_GridModule]  # Categorical numeric parameter
+par_type = categorical
+choices = [6.5, 8.0]  # ✅ Actual values (2 个选项)
 lb = 0
-ub = 2
+ub = 1  # ← len(choices) - 1
+
+[x3_Type]  # Categorical string parameter
+par_type = categorical
+choices = ['Chaos', 'Rotated', 'Strict']  # ✅ 字符串值需引号 (3 个选项)
+lb = 0
+ub = 2  # ← len(choices) - 1
 
 [init_strat]
 generator = ManualGenerator
 
 [ManualGenerator]
-points = [[2.8, 8.0, 2], [2.8, 6.5, 0]]  # ✅ 类别用数值索引
+# ✅ Categorical 参数用 actual values (numeric: 2.8, 4.0; string 用 index: 0, 1, 2)
+points = [[2.8, 6.5, 2], [4.0, 8.0, 0]]
 
 [opt_strat]
 generator = CustomPoolBasedGenerator
@@ -127,7 +176,7 @@ pool_points = [[...]]  # 由 server_manager.py 动态注入
 
 [CustomBaseGPResidualMixedFactory]
 continuous_params = []  # ✅ 空列表表示无连续参数
-discrete_params = {'x1_Height': 3, 'x2_Width': 2, 'x3_Type': 3}  # ✅ 键需引号
+discrete_params = {'x1_CeilingHeight': 3, 'x2_GridModule': 2, 'x3_Type': 3}  # ✅ 键需引号
 basegp_scan_csv = extensions/warmup_budget_check/.../design_space_scan.csv
 mean_type = pure_residual
 lengthscale_prior = lognormal
@@ -179,4 +228,4 @@ variable_types_list = categorical, categorical, categorical  # ✅ 逗号分隔�
 
 ---
 
-**最后更新**: 2025-12-08
+**最后更新**: 2025-12-10 (新增: Categorical Numeric Parameters Double Transformation 陷阱)

@@ -1,0 +1,111 @@
+#!/usr/bin/env python3
+"""
+诊断：CustomPoolBasedGenerator.gen() 返回的值是否被使用？
+"""
+
+print("""
+【关键诊断问题】
+
+流程应该是：
+
+  1. AEPsych.SequentialStrategy.gen() 
+       ↓
+  2. 调用 CustomPoolBasedGenerator.gen(num_points=1, model=...)
+       ↓
+  3. CustomPoolBasedGenerator在池点上评估acqf
+       ↓
+  4. 选择acqf最高的池点
+       ↓
+  5. 返回该点给 AEPsych
+       ↓
+  6. sampling_loop.py 接收到该点
+       ↓
+  7. evaluate(该点)
+
+
+【你现在看到的现象】
+
+在 sampling_loop.py 中接收的是：
+  - Condition_ID（看起来像行号）
+  - 或者连续值（5.6, 4.0等）
+
+这说明：
+
+❌ CustomPoolBasedGenerator.gen() 返回的点没有被正确传递出去
+
+可能的原因：
+
+1️⃣  AEPsych的变换层在拦截
+    - 在 aepsych/transforms/parameters.py 中有变换
+    - 可能改变了返回值
+
+2️⃣  返回值的格式不对
+    - CustomPoolBasedGenerator 返回 torch.Tensor
+    - 但 AEPsych 期望特定的格式
+
+3️⃣  EUR采集函数覆盖了采样决策
+    - EUR在外层独立评估
+    - 没有使用 CustomPoolBasedGenerator 的选择
+
+【验证方法】
+
+在 CustomPoolBasedGenerator.gen() 中添加诊断日志：
+""")
+
+code = '''
+def gen(self, num_points: int = 1, model = None, **kwargs):
+    """
+    """
+    # ... existing code ...
+    
+    selected_points = self.pool_points[selected_pool_indices]
+    
+    # 📍 关键诊断日志
+    logger.bind(
+        action="POOL_GEN_RETURN",
+        selected_indices=selected_pool_indices.tolist(),
+        selected_points=selected_points.tolist(),
+        shape=selected_points.shape,
+        dtype=str(selected_points.dtype)
+    ).info("💾 CustomPoolBasedGenerator 返回的点")
+    
+    return selected_points
+'''
+
+print(code)
+
+print("""
+然后在 sampling_loop.py 中打印接收到的值：
+
+    response = server.handle_request(ask_message)
+    x_dict = response["config"]
+    
+    logger.bind(
+        action="SAMPLING_LOOP_RECEIVE",
+        x_dict_keys=list(x_dict.keys()),
+        x_dict=x_dict
+    ).info("📥 sampling_loop 接收到的点")
+
+【对比两个日志】
+
+如果：
+  CustomPoolBasedGenerator 返回 [2.8, 6.5, 2, 2, 0, 0]
+  但 sampling_loop 收到     [5.6, ...]  或 Condition_ID
+
+说明：中间某个环节把点改了！
+
+【最可能的原因】
+
+AEPsych 的 EUR 采集函数可能在 CustomPoolBasedGenerator 之外
+独立生成了采样点，而不是用 CustomPoolBasedGenerator 返回的点。
+
+这会导致：
+  ✅ CustomPoolBasedGenerator.gen() 有正确的逻辑
+  ❌ 但它的返回值被忽视了
+  ❌ 实际采样的是 EUR 生成的点
+
+【如果是这样】
+
+那就需要改 EUR 的配置，让它用 CustomPoolBasedGenerator 而不是
+自己生成采样点。
+""")

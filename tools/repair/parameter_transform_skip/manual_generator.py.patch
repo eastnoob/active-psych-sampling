@@ -1,0 +1,16 @@
+# Patch for AEPsych ManualGenerator
+# Adds _skip_untransform flag to signal points are in actual value space
+# Location: .pixi/envs/default/Lib/site-packages/aepsych/generators/manual_generator.py
+# Line: ~18-22
+
+--- a/.pixi/envs/default/Lib/site-packages/aepsych/generators/manual_generator.py
++++ b/.pixi/envs/default/Lib/site-packages/aepsych/generators/manual_generator.py
+@@ -18,6 +18,7 @@ from torch.quasirandom import SobolEngine
+ class ManualGenerator(AEPsychGenerator):
+     """Generator that generates points from a predefined list."""
+
+     _requires_model = False
++    _skip_untransform = True  # Signal that points are already in actual value space
+
+     def __init__(
+         self,

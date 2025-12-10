@@ -1,0 +1,75 @@
+"""
+修复补丁：AEPsych Categorical Numeric Parameters Bug (方案A)
+
+这个补丁修复了 AEPsych 中 Categorical transform 无法正确处理数值型 categorical 参数的问题。
+
+【问题描述】
+
+原始代码强制所有 choices 解析为字符串 (element_type=str)，导致：
+- 数值型 choices [2.8, 4.0, 8.5] 被解析为字符串 ['2.8', '4.0', '8.5']
+- Server 返回 indices (0, 1, 2) 而非 actual values (2.8, 4.0, 8.5)
+- 下游系统(Oracle)接收到错误的参数值
+
+【应用方法】
+
+将下面的代码替换到文件：
+    .pixi/envs/default/Lib/site-packages/aepsych/transforms/ops/categorical.py
+
+位置：在 `get_config_options` 方法中，第 95-98 行
+      （从 `if "categories" not in options:` 到 `options["categories"] = cat_dict` 之间）
+
+【要替换的原始代码】
+"""
+
+# 原始代码 (第 95-98 行)：
+if "categories" not in options:
+    idx = options["indices"][0]  # There should only be one index
+    cat_dict = {idx: config.getlist(name, "choices", element_type=str)}
+    options["categories"] = cat_dict
+
+"""
+【替换为以下代码】
+"""
+
+# ========== Fix for numeric categorical parameters ==========
+if "categories" not in options:
+    idx = options["indices"][0]  # There should only be one index
+
+    # Try to parse choices as numeric (float) first, fallback to string
+    # This allows numeric choices like [2.8, 4.0, 8.5] to be stored as floats
+    # instead of strings ['2.8', '4.0', '8.5']
+    try:
+        # Try numeric parsing
+        choices_values = config.getlist(name, "choices", element_type=float)
+    except (ValueError, TypeError):
+        # Fallback to string parsing (remove quotes if present)
+        choices_values = config.getlist(name, "choices", element_type=str)
+        choices_values = [s.strip("'\"") for s in choices_values]
+
+    cat_dict = {idx: choices_values}
+    options["categories"] = cat_dict
+# ========== End of fix ==========
+
+"""
+【修复效果】
+
+- 数值型 choices [2.8, 4.0, 8.5] → 解析为 float list [2.8, 4.0, 8.5]
+- 字符串 choices ['Chaos', 'Rotated'] → 解析为 string list ['Chaos', 'Rotated']
+- Server 正确返回 actual values 而非 indices
+- 向后兼容，不影响现有功能
+
+【备份建议】
+
+在修改前建议备份原文件：
+
+    cp .pixi/envs/default/Lib/site-packages/aepsych/transforms/ops/categorical.py \
+       .pixi/envs/default/Lib/site-packages/aepsych/transforms/ops/categorical.py.backup
+
+【验证方法】
+
+修复后运行测试：
+
+    pixi run python tools/repair/categorical_numeric_fix/verify_fix.py
+
+预期输出：[SUCCESS] AEPsych fix working correctly!
+"""

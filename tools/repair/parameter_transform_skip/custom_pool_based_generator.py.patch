@@ -1,0 +1,15 @@
+# Patch for CustomPoolBasedGenerator
+# Adds _skip_untransform flag to signal generator outputs actual values
+# Location: extensions/custom_generators/custom_pool_based_generator.py
+# Line: ~55-81
+
+--- a/extensions/custom_generators/custom_pool_based_generator.py
++++ b/extensions/custom_generators/custom_pool_based_generator.py
+@@ -79,6 +79,7 @@ class CustomPoolBasedGenerator(AcqfGenerator):
+     """
+
+     _requires_model = True  # Changed to True since we use acquisition functions
++    _skip_untransform = True  # Signal that we output actual values directly
+
+     def __init__(
+         self,

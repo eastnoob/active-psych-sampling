@@ -1,0 +1,21 @@
+# Patch for AEPsych ParameterTransformedGenerator.gen()
+# Allows generators to skip untransform by setting _skip_untransform=True
+# Location: .pixi/envs/default/Lib/site-packages/aepsych/transforms/parameters.py
+# Line: ~428-436
+
+--- a/.pixi/envs/default/Lib/site-packages/aepsych/transforms/parameters.py
++++ b/.pixi/envs/default/Lib/site-packages/aepsych/transforms/parameters.py
+@@ -425,6 +425,12 @@ class ParameterTransformedGenerator(ParameterTransformWrapper, ConfigurableMixi
+         x = self._base_obj.gen(
+             num_points, model, fixed_features=transformed_fixed, **kwargs
+         )
++
++        # ========== PATCH: Allow generators to skip untransform ==========
++        # Check if generator explicitly signals it outputs actual values
++        if hasattr(self._base_obj, '_skip_untransform') and self._base_obj._skip_untransform:
++            return x  # Already in actual value space, skip untransform
++        # ========== End of patch ==========
++
+         return self.transforms.untransform(x)
+
+     def _get_acqf_options(self, acqf: AcquisitionFunction, config: Config):

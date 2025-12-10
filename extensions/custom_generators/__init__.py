@@ -12,11 +12,24 @@ This module contains custom generator implementations that extend AEPsych functi
 """
 
 from .custom_pool_based_generator import CustomPoolBasedGenerator
-from .warmup_minimal import WarmupMinimalGenerator
-from .warmup_mixed_pool import WarmupMixedPoolGenerator
+
+# Conditionally import optional components (archived generators)
+try:
+    from .archive.warmup_minimal import WarmupMinimalGenerator
+except ImportError:
+    WarmupMinimalGenerator = None
+
+try:
+    from .archive.warmup_mixed_pool import WarmupMixedPoolGenerator
+except ImportError:
+    WarmupMixedPoolGenerator = None
 
 __all__ = [
     "CustomPoolBasedGenerator",
-    "WarmupMinimalGenerator",
-    "WarmupMixedPoolGenerator",
 ]
+
+if WarmupMinimalGenerator is not None:
+    __all__.append("WarmupMinimalGenerator")
+
+if WarmupMixedPoolGenerator is not None:
+    __all__.append("WarmupMixedPoolGenerator")

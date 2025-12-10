@@ -18,6 +18,9 @@ or other criteria.
 from typing import Any, Optional
 import sys
 import os
+import sqlite3
+import tempfile
+from pathlib import Path
 
 # Add temp_aepsych to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "temp_aepsych"))
@@ -29,6 +32,24 @@ from aepsych.utils import _process_bounds
 from aepsych.generators.base import AcqfGenerator
 from botorch.acquisition import AcquisitionFunction
 from loguru import logger
+
+# Import modularized components with fallback for different import contexts
+try:
+    # Try relative import (when used as part of the package)
+    from .models import (
+        DedupDatabaseManager,
+        HistoryManager,
+        AcquisitionManager,
+        pool_utils,
+    )
+except ImportError:
+    # Fall back to absolute import (when imported directly)
+    from models import (
+        DedupDatabaseManager,
+        HistoryManager,
+        AcquisitionManager,
+        pool_utils,
+    )
 
 
 class CustomPoolBasedGenerator(AcqfGenerator):
@@ -57,6 +78,7 @@ class CustomPoolBasedGenerator(AcqfGenerator):
     """
 
     _requires_model = True  # Changed to True since we use acquisition functions
+    _skip_untransform = True  # Signal that we output actual values directly
 
     def __init__(
         self,
@@ -69,6 +91,8 @@ class CustomPoolBasedGenerator(AcqfGenerator):
         allow_resampling: bool = False,
         shuffle: bool = True,
         seed: Optional[int] = None,
+        dedup_database_path: Optional[str] = None,
+        _categorical_mappings: Optional[dict] = None,
     ) -> None:
         """
         Initialize PoolBasedGenerator.
@@ -86,19 +110,38 @@ class CustomPoolBasedGenerator(AcqfGenerator):
             shuffle (bool): Whether to shuffle the pool initially (used when no model
                 is available). Default is True.
             seed (int, optional): Random seed for reproducibility. Defaults to None.
+            dedup_database_path (str, tuple, or None, optional): Deduplication database configuration.
+                - If str: Full path to SQLite database file (Mode 1: Manual specification)
+                - If tuple: Auto-generate path from (subject_id, run_id) or (subject_id, run_id, save_dir)
+                  Examples: ("subject_A", "run001") → ./data/subject_A_run001_dedup.db
+                            ("subject_A", "run001", "./custom") → ./custom/subject_A_run001_dedup.db
+                  (Mode 3: Auto-naming with optional custom directory)
+                - If None: Temporary in-memory database, auto-cleaned after run (Mode 2)
+                Default is None.
         """
         super().__init__(acqf=acqf, acqf_kwargs=acqf_kwargs)
         self.seed = seed
         self.lb, self.ub, self.dim = _process_bounds(lb, ub, dim)
         self.allow_resampling = allow_resampling
 
-        # 【新增】缓存采集函数实例，确保诊断信息的一致性
+        # Initialize dedup manager early (no dependencies)
+        self.dedup_database_path = dedup_database_path
+        self._aepsych_server = None
+        self._dedup_manager = DedupDatabaseManager(dedup_database_path)
+
+        # Acquisition manager - needs acqf and acqf_kwargs
+        self._acquisition_manager = AcquisitionManager(acqf, acqf_kwargs)
+
+        # Managers will be initialized after pool_points is validated
+        self._history_manager = None
+
+        # For backward compatibility, maintain direct access attributes
+        self._dedup_conn = None  # Not used directly anymore
+        self._is_temp_db = False  # From dedup_manager
         self._acqf_instance = None
         self._acqf_instance_model = None
-        self._last_model_train_size = None  # 追踪模型训练样本数,用于检测refit
-        self._last_train_tensor_id = (
-            None  # 追踪train_inputs[0]的tensor ID,更可靠的refit检测
-        )
+        self._last_model_train_size = None
+        self._last_train_tensor_id = None
 
         # Validate pool_points
         if pool_points is None or len(pool_points) == 0:
@@ -119,6 +162,21 @@ class CustomPoolBasedGenerator(AcqfGenerator):
                 f"does not match specified dim ({self.dim})"
             )
 
+        # ========== IMPORTANT: Categorical Parameters ==========
+        # For NUMERIC categorical parameters (e.g., choices=[2.8, 4.0, 8.5]):
+        # - AEPsych treats numeric choices as actual values, NOT indices
+        # - pool_points should contain actual values (2.8, 4.0, 8.5), NOT indices (0, 1, 2)
+        # - ManualGenerator uses actual values: [[2.8, 6.5, 2, 2, 0, 0], ...]
+        # - Generator returns actual values → Categorical.round() → actual values
+        #
+        # For STRING categorical parameters (e.g., choices=['Strict', 'Rotated', 'Chaos']):
+        # - pool_points should contain indices (0, 1, 2)
+        # - indices_to_str() will convert indices → choice strings
+
+        logger.info(
+            f"[PoolGen] Pool points loaded: {pool_points.shape}, expecting actual values for numeric categorical params"
+        )
+
         # Optionally shuffle the pool
         if shuffle:
             if seed is not None:
@@ -126,13 +184,27 @@ class CustomPoolBasedGenerator(AcqfGenerator):
             perm = torch.randperm(len(pool_points))
             pool_points = pool_points[perm]
 
-        self.pool_points = pool_points
-        self._used_indices = set()
+        self.pool_points = pool_points  # Store actual values for numeric categorical params
 
-        # Server instance for database access
-        self._aepsych_server = None
+        # Now initialize HistoryManager with pool_points and dim
+        self._history_manager = HistoryManager(self.pool_points, self.dim)
+
+        self._used_indices = set()
+        self._historical_points = set()
+
         self._current_idx = 0
         self.max_asks = len(self.pool_points) if not allow_resampling else None
+
+        # ========== Fallback mapping for categorical parameters ==========
+        # Store indices→actual_values mapping as a safety fallback
+        # This ensures correct values are returned even if AEPsych's
+        # Categorical transform fails to map indices to actual values
+        self._categorical_mappings = _categorical_mappings or {}  # {param_idx: {0: 2.8, 1: 4.0, 2: 8.5}}
+        if self._categorical_mappings:
+            logger.info(f"[PoolGen] Fallback mappings loaded for {len(self._categorical_mappings)} categorical parameters")
+
+        # Initialize dedup database after setting up pool_points
+        self._initialize_dedup_database()
 
     def gen(
         self,
@@ -207,19 +279,16 @@ class CustomPoolBasedGenerator(AcqfGenerator):
         if model is not None:
             model.eval()
 
-            # 【调试】检查收到的 model
-            import sys
-
+            # Log model info for debugging
             if hasattr(model, "train_inputs") and model.train_inputs:
-                print(
-                    f"[PoolGen.gen] Received model_id={id(model)}, train_inputs[0].shape={model.train_inputs[0].shape}",
-                    file=sys.stderr,
-                )
+                logger.bind(
+                    model_id=id(model), train_shape=tuple(model.train_inputs[0].shape)
+                ).trace("模型接收")
                 if hasattr(model, "_base_obj"):
-                    print(
-                        f"[PoolGen.gen] model._base_obj id={id(model._base_obj)}, _base_obj._train_inputs[0].shape={model._base_obj._train_inputs[0].shape}",
-                        file=sys.stderr,
-                    )
+                    logger.bind(
+                        base_obj_id=id(model._base_obj),
+                        base_train_shape=tuple(model._base_obj._train_inputs[0].shape),
+                    ).trace("基础对象信息")
 
             # Move points to model device if needed
             if hasattr(model, "device"):
@@ -232,17 +301,20 @@ class CustomPoolBasedGenerator(AcqfGenerator):
                 if hasattr(model, "train_inputs") and model.train_inputs
                 else 0
             )
-            logger.debug(
-                f"[PoolGen] model_id={id(model)}, train_inputs[0]_id={id(model.train_inputs[0]) if hasattr(model, 'train_inputs') and model.train_inputs else 'None'}, current_train_size={current_train_size}, _last_model_train_size={self._last_model_train_size}"
-            )
             need_recreate = (
                 self._acqf_instance is None
                 or self._last_model_train_size is None
                 or current_train_size != self._last_model_train_size
             )
-            logger.debug(
-                f"[PoolGen] need_recreate={need_recreate}, _acqf_instance={'None' if self._acqf_instance is None else type(self._acqf_instance).__name__}"
-            )
+            logger.bind(
+                train_size=current_train_size,
+                need_recreate=need_recreate,
+                acqf_cached=(
+                    type(self._acqf_instance).__name__
+                    if self._acqf_instance
+                    else "None"
+                ),
+            ).debug("模型缓存检测")
 
             if need_recreate:
                 # 【关键修复】在重新创建acqf之前，保存旧weight_engine的r_t状态
@@ -277,9 +349,10 @@ class CustomPoolBasedGenerator(AcqfGenerator):
                                 old_we.sps_tracker, "r_t_smoothed", None
                             ),
                         }
-                    logger.debug(
-                        f"[PoolGen] Saved old weight_engine state: _r_t_smoothed={old_weight_engine_state['_r_t_smoothed']}, sps_state={'exists' if old_sps_tracker_state else 'None'}"
-                    )
+                    logger.bind(
+                        r_t_smoothed=old_weight_engine_state["_r_t_smoothed"],
+                        sps_state="exists" if old_sps_tracker_state else "None",
+                    ).trace("weight_engine状态保存")
 
                 acqf = self._instantiate_acquisition_fn(model)
                 self._acqf_instance = acqf
@@ -319,18 +392,19 @@ class CustomPoolBasedGenerator(AcqfGenerator):
                                 "r_t_smoothed"
                             ]
 
-                    logger.debug(
-                        f"[PoolGen] Restored weight_engine state: _prev_core_params={'exists' if new_we._prev_core_params is not None else 'None'}, _r_t_smoothed={new_we._r_t_smoothed}"
-                    )
+                    logger.bind(
+                        has_prev_params=(
+                            "exists" if new_we._prev_core_params is not None else "None"
+                        ),
+                        r_t_smoothed=new_we._r_t_smoothed,
+                    ).trace("weight_engine状态恢复")
 
                 # 同步训练状态
                 if hasattr(acqf, "weight_engine"):
                     acqf.weight_engine.update_training_status(
                         current_train_size, fitted=True
                     )
-                logger.debug(
-                    f"[PoolGen] Created new acqf, train_size={current_train_size}, synced weight_engine"
-                )
+                logger.bind(train_size=current_train_size).trace("新acqf已创建并同步")
             else:
                 acqf = self._acqf_instance
                 # Update weight_engine with current training status
@@ -338,9 +412,7 @@ class CustomPoolBasedGenerator(AcqfGenerator):
                     acqf.weight_engine.update_training_status(
                         current_train_size, fitted=True
                     )
-                logger.debug(
-                    f"[PoolGen] Reusing cached acqf, train_size={current_train_size}"
-                )
+                logger.bind(train_size=current_train_size).trace("复用缓存acqf")
 
             # Evaluate acquisition function on all available points
             with torch.no_grad():
@@ -367,20 +439,25 @@ class CustomPoolBasedGenerator(AcqfGenerator):
             selected_pool_indices = available_indices[top_indices]
             selected_points = self.pool_points[selected_pool_indices]
 
-            logger.debug(
-                "PoolBasedGenerator used=%d available=%d picked=%s",
-                len(self._used_indices),
-                len(available_indices),
-                selected_pool_indices.tolist(),
-            )
+            # Debug: log selected pool indices and values to trace potential mutations
+            try:
+                log_points = selected_points.detach().cpu().numpy()
+                logger.info(
+                    "[PoolGen] Selected points from pool",
+                    indices=selected_pool_indices.tolist(),
+                    points=log_points.tolist(),
+                )
+            except Exception as e:  # pragma: no cover - best-effort logging
+                logger.debug(f"[PoolGen] Failed to log selected points: {e}")
 
             # 计算总的已使用点数（包括刚选中的点）
             total_used = len(self._used_indices)
-            logger.info(
-                f"[PoolGen] 选中 {actual_num_points} 个点: 索引={selected_pool_indices.tolist()}, "
-                f"总已用点={total_used}个, 剩余={len(self.pool_points)-total_used}个, "
-                f"采集函数={self.acqf.__name__}"
-            )
+            logger.bind(
+                selected=selected_pool_indices.tolist(),
+                used_count=total_used,
+                remaining=len(self.pool_points) - total_used,
+                acqf_name=self.acqf.__name__,
+            ).info("点选择完成")
         else:
             # Fallback: sequential selection if no model (shouldn't happen with _requires_model=True)
             logger.warning("No model provided, using sequential selection")
@@ -393,28 +470,323 @@ class CustomPoolBasedGenerator(AcqfGenerator):
         # Store the last selected indices for external access
         self.last_selected_indices = selected_pool_indices.tolist()
 
-        logger.debug(
-            "PoolBasedGenerator used_indices now=%s",
-            sorted(self._used_indices),
+        # 【新增】记录选中的点到去重数据库
+        self._record_points_to_dedup_db(selected_points)
+
+        # ========== CRITICAL: Ensure points come from pool ==========
+        # 【关键验证】确保返回的点确实来自pool,而不是被transform修改
+        # 这是CustomPoolBasedGenerator的核心约束:所有点必须来自pool
+        logger.info(
+            f"[PoolGen] 返回 {len(selected_points)} 个来自pool的点"
         )
+        for i, (idx, point) in enumerate(zip(selected_pool_indices.tolist(), selected_points)):
+            pool_point = self.pool_points[idx]
+            match = torch.allclose(point, pool_point, atol=1e-6)
+            if not match:
+                logger.warning(
+                    f"[PoolGen WARNING] Point {i} mismatch! "
+                    f"pool[{idx}]={pool_point.tolist()} vs returned={point.tolist()}"
+                )
+            else:
+                logger.debug(
+                    f"[PoolGen] Point {i}: pool[{idx}]={point.tolist()} ✓"
+                )
+
+        # ========== Fallback Transform: Apply categorical mapping if needed ==========
+        # This is a safety mechanism in case AEPsych's Categorical transform
+        # fails to map indices to actual values (due to string_map=None or element_type=str bug)
+        if self._categorical_mappings:
+            selected_points = self._ensure_actual_values(selected_points)
 
         return selected_points
 
+    def _ensure_actual_values(self, points_tensor: torch.Tensor) -> torch.Tensor:
+        """
+        Ensure categorical parameters contain actual values rather than indices.
+
+        This method implements a fallback transform mechanism:
+        1. Checks if values are indices (0, 1, 2...) that need mapping
+        2. If so, applies stored mappings to convert indices → actual values
+        3. If AEPsych's transform already worked, returns unchanged
+
+        This provides a safety net in case AEPsych's Categorical transform
+        fails due to string_map=None or element_type=str bug.
+
+        Args:
+            points_tensor: [batch, dim] tensor potentially containing indices
+
+        Returns:
+            [batch, dim] tensor with actual values for numeric categorical parameters
+        """
+        if not self._categorical_mappings:
+            return points_tensor
+
+        result = points_tensor.clone()
+        applied_mappings = []
+
+        for param_idx, mapping in self._categorical_mappings.items():
+            for batch_idx in range(result.shape[0]):
+                value = result[batch_idx, param_idx].item()
+
+                # Check if value looks like an index (integer within mapping range)
+                if value == int(value) and int(value) in mapping:
+                    expected_actual = mapping[int(value)]
+
+                    # If value != expected_actual, it's an index that needs mapping
+                    if abs(value - expected_actual) > 1e-6:
+                        result[batch_idx, param_idx] = expected_actual
+                        applied_mappings.append({
+                            'batch': batch_idx,
+                            'param': param_idx,
+                            'index': int(value),
+                            'actual': expected_actual
+                        })
+
+        if applied_mappings:
+            logger.warning(
+                f"[PoolGen FALLBACK] Applied {len(applied_mappings)} categorical mappings "
+                f"(AEPsych transform failed). First 3: {applied_mappings[:3]}"
+            )
+
+        return result
+
+    def _record_points_to_dedup_db(self, points: torch.Tensor) -> None:
+        """
+        Record selected sampling points to dedup database (delegated to DedupDatabaseManager).
+
+        Args:
+            points (torch.Tensor): Selected sampling points [num_points x dim]
+        """
+        self._dedup_manager.record_points(points)
+        # Also update backward compatibility attribute
+        if points.shape[0] > 0:
+            points_np = points.cpu().numpy() if points.is_cuda else points.numpy()
+            for point in points_np:
+                self._historical_points.add(tuple(point))
+
+    def _generate_db_path(self, config_value) -> str:
+        """
+        Generate database path from config value (delegated to DedupDatabaseManager).
+
+        Args:
+            config_value: Tuple format (subject_id, run_id) or (subject_id, run_id, save_dir)
+
+        Returns:
+            Generated database path
+        """
+        return self._dedup_manager._generate_db_path(config_value)
+
+    def _initialize_dedup_database(self) -> None:
+        """
+        Initialize dedup database (delegated to DedupDatabaseManager).
+
+        This method is kept for backward compatibility but delegates to the manager.
+        """
+        self._dedup_manager.initialize()
+        # Sync backward compatibility attributes from manager
+        self._is_temp_db = self._dedup_manager.is_temp_db
+        self._dedup_conn = self._dedup_manager._dedup_conn
+
+    def _load_historical_points_from_dedup_db(self) -> None:
+        """
+        Load historical sampling points from dedup database (delegated to DedupDatabaseManager).
+
+        This method is kept for backward compatibility but delegates to the manager.
+        """
+        self._dedup_manager.load_historical_points()
+
     def _get_available_indices(self) -> torch.Tensor:
         """
-        Get indices of points that haven't been used yet.
+        Get indices of points that haven't been used yet (delegated to pool_utils).
 
         Returns:
             torch.Tensor: Tensor of available indices.
         """
-        all_indices = torch.arange(len(self.pool_points))
-        if len(self._used_indices) == 0:
-            return all_indices
+        available = pool_utils.get_available_indices(
+            self._used_indices,
+            len(self.pool_points),
+            self.pool_points,
+            self._historical_points,
+        )
+        return available
 
-        used_tensor = torch.tensor(list(self._used_indices))
-        mask = torch.ones(len(self.pool_points), dtype=torch.bool)
-        mask[used_tensor] = False
-        return all_indices[mask]
+    @staticmethod
+    def _generate_pool_from_config(config: Config) -> torch.Tensor:
+        """
+        从Config的参数定义自动生成pool (笛卡尔积组合)
+        
+        重要: INI中categorical参数的choices定义的是**真值**(actual values),
+        例如: choices = [2.8, 4.0, 8.5] 或 choices = ['Chaos', 'Rotated', 'Strict']
+        
+        但是pool需要存储**indices** (0, 1, 2...),因为:
+        1. ParameterTransformedGenerator内部使用indices
+        2. untransform会将indices转换回真值
+        
+        Args:
+            config: AEPsych Config对象
+            
+        Returns:
+            torch.Tensor: Pool点的张量 [n_combinations, n_dims], 存储actual values而非indices
+            
+        Raises:
+            ValueError: 如果参数定义不完整或格式错误
+        """
+        import itertools
+        
+        # 创建独立的debug日志文件
+        debug_log_path = Path(tempfile.gettempdir()) / "pool_generation_debug.log"
+        
+        def log_debug(msg):
+            """同时输出到logger和独立日志文件"""
+            logger.debug(msg)
+            with open(debug_log_path, "a", encoding="utf-8") as f:
+                f.write(f"{msg}\n")
+        
+        # 清空旧日志
+        with open(debug_log_path, "w", encoding="utf-8") as f:
+            f.write("=" * 80 + "\n")
+            f.write("Pool Generation Debug Log\n")
+            f.write("=" * 80 + "\n\n")
+        
+        log_debug("[PoolGen] 开始从Config生成pool")
+        
+        # 获取参数名称
+        try:
+            # 使用get()而不是getlist(),因为getlist()会尝试类型转换
+            parnames_str = config.get("common", "parnames", fallback=None)
+            log_debug(f"[PoolGen] Raw parnames string from config: {parnames_str}")
+            
+            if parnames_str is None:
+                raise ValueError("Config中缺少[common] parnames定义")
+            
+            # 手动解析列表
+            import ast
+            parnames_raw = ast.literal_eval(parnames_str)
+            log_debug(f"[PoolGen] Parsed parnames: {parnames_raw}")
+            
+            # 清理参数名(移除可能的引号)
+            parnames = [str(name).strip().strip("'\"") for name in parnames_raw]
+            log_debug(f"[PoolGen] Cleaned parnames: {parnames}")
+            
+        except Exception as e:
+            log_debug(f"[PoolGen] ERROR parsing parnames: {e}")
+            import traceback
+            log_debug(f"[PoolGen] Traceback:\n{traceback.format_exc()}")
+            raise ValueError(f"无法解析parnames: {e}")
+        
+        # 收集每个参数的choices indices和actual values
+        param_choices_indices = []  # indices for combination generation (原始)
+        param_choices_values = []   # actual values for pool (最终用于pool_points)
+        param_info = []  # 用于详细日志
+        
+        for i, par_name in enumerate(parnames):
+            log_debug(f"\n[PoolGen] 处理参数 {i}: {par_name}")
+            
+            # 获取par_type
+            try:
+                par_type = config.get(par_name, "par_type", fallback="continuous")
+                log_debug(f"  par_type: {par_type}")
+            except Exception as e:
+                log_debug(f"  ERROR getting par_type: {e}")
+                par_type = "continuous"
+            
+            if par_type == "categorical":
+                try:
+                    # 获取choices字符串
+                    choices_str = config.get(par_name, "choices")
+                    log_debug(f"  choices_str: {choices_str}")
+                    
+                    # Parse choices (真值列表)
+                    import ast
+                    choices_values = ast.literal_eval(choices_str)
+                    log_debug(f"  choices_values (actual values): {choices_values}")
+                    log_debug(f"  choices_values type: {type(choices_values)}")
+                    
+                    # 【修复】区分numeric和string类型
+                    n_choices = len(choices_values)
+                    indices = list(range(n_choices))  # 0, 1, 2, ...
+                    
+                    # 检测是否为numeric choices
+                    is_numeric = all(isinstance(v, (int, float)) for v in choices_values)
+
+                    # 【修复】所有categorical参数统一使用indices
+                    # 这样AEPsych的ParameterTransform才能正确工作
+                    # Transform层会将indices映射到actual values
+                    float_indices = [float(i) for i in indices]
+                    param_choices_values.append(float_indices)
+
+                    if is_numeric:
+                        log_debug(f"  ✓ Numeric categorical: using indices {float_indices} (will be transformed to {choices_values})")
+                    else:
+                        log_debug(f"  ✓ String categorical: using indices {float_indices} (will be transformed to {choices_values})")
+
+                    param_choices_indices.append(indices)
+                    
+                    param_info.append({
+                        "name": par_name,
+                        "type": par_type,
+                        "actual_values": choices_values,
+                        "indices": indices,
+                        "is_numeric": is_numeric
+                    })
+                    
+                    log_debug(f"  映射关系: {dict(zip(indices, choices_values))}")
+                    
+                except Exception as e:
+                    log_debug(f"  ERROR parsing choices: {e}")
+                    import traceback
+                    log_debug(f"  Traceback: {traceback.format_exc()}")
+                    raise ValueError(f"无法解析参数 {par_name} 的choices: {e}")
+            else:
+                log_debug(f"  ERROR: 参数类型不是categorical")
+                raise ValueError(
+                    f"参数 {par_name} 不是categorical类型(type={par_type}),自动pool生成仅支持categorical参数。"
+                    f"如需连续参数,请手动提供pool_points。"
+                )
+        
+        # 【修复】使用indices生成笛卡尔积（所有categorical参数统一使用indices）
+        # AEPsych的Transform层会将indices正确映射到actual values
+        log_debug(f"\n[PoolGen] 开始生成笛卡尔积（使用indices）")
+        log_debug(f"  参数数量: {len(param_choices_values)}")
+        log_debug(f"  每个参数的choices数: {[len(c) for c in param_choices_values]}")
+        
+        combinations = list(itertools.product(*param_choices_values))
+        pool_array = torch.tensor(combinations, dtype=torch.float32)
+        
+        log_debug(f"  ✓ 生成 {len(combinations)} 个组合")
+        log_debug(f"  Pool shape: {pool_array.shape}")
+        log_debug(f"  Pool前5行:\n{pool_array[:5]}")
+        
+        # 输出详细摘要
+        log_debug(f"\n" + "=" * 80)
+        log_debug(f"Pool Generation Summary")
+        log_debug(f"=" * 80)
+        for info in param_info:
+            log_debug(f"  {info['name']}:")
+            log_debug(f"    类型: {info['type']}")
+            log_debug(f"    数值型: {info.get('is_numeric', 'N/A')}")
+            log_debug(f"    真值: {info['actual_values']}")
+            log_debug(f"    索引: {info['indices']}")
+        log_debug(f"\n  总组合数: {len(combinations)}")
+        log_debug(f"  Pool tensor shape: {pool_array.shape}")
+        log_debug(f"  Pool前5行:\n{pool_array[:5]}")
+        log_debug(f"\n日志文件: {debug_log_path}")
+        log_debug("=" * 80 + "\n")
+        
+        logger.info(f"[PoolGen] 从{len(parnames)}个categorical参数生成 {len(combinations)} 个组合")
+        logger.info(f"[PoolGen] 详细日志: {debug_log_path}")
+
+        # 【新增】返回categorical mappings for fallback transform
+        # Format: {param_idx: {0: 2.8, 1: 4.0, 2: 8.5}}
+        categorical_mappings = {}
+        for i, info in enumerate(param_info):
+            # 只为numeric categorical存储映射(string categorical不需要)
+            if info.get('is_numeric', False):
+                mapping = dict(zip(info['indices'], info['actual_values']))
+                categorical_mappings[i] = mapping
+                log_debug(f"  Stored mapping for {info['name']} (param_idx={i}): {mapping}")
+
+        return pool_array, categorical_mappings
 
     @classmethod
     def get_config_options(
@@ -460,6 +832,36 @@ class CustomPoolBasedGenerator(AcqfGenerator):
             if len(pool_points.shape) == 3:
                 # Configs have a reasonable natural input method that produces incorrect tensors
                 options["pool_points"] = pool_points.swapaxes(-1, -2).squeeze(0)
+        else:
+            # 【新增】自动从Config的参数定义生成pool (排列组合)
+            logger.info("[Config] pool_points未提供,将从参数choices自动生成")
+            try:
+                pool_points, categorical_mappings = cls._generate_pool_from_config(config)
+                options["pool_points"] = pool_points
+                options["_categorical_mappings"] = categorical_mappings  # 传递mapping信息
+                logger.info(f"[Config] 自动生成pool: {pool_points.shape[0]} 个候选点")
+                if categorical_mappings:
+                    logger.info(f"[Config] 存储了 {len(categorical_mappings)} 个categorical参数的映射")
+            except Exception as e:
+                logger.error(f"[Config] 自动生成pool失败: {e}")
+                raise ValueError(
+                    f"pool_points未在config中提供,且自动生成失败: {e}"
+                )
+
+        # 【新增】处理 dedup_database_path 参数
+        if "dedup_database_path" not in options:
+            try:
+                dedup_db_path = config.getstr(
+                    name, "dedup_database_path", fallback=None
+                )
+                if dedup_db_path and dedup_db_path.lower() != "none":
+                    options["dedup_database_path"] = dedup_db_path
+                    logger.info(f"[Config] 使用手动指定的去重数据库: {dedup_db_path}")
+                else:
+                    options["dedup_database_path"] = None
+                    logger.info("[Config] 使用临时内存去重数据库")
+            except Exception:
+                options["dedup_database_path"] = None
 
         return options
 
@@ -481,222 +883,153 @@ class CustomPoolBasedGenerator(AcqfGenerator):
         self._current_idx = 0
         logger.info("PoolBasedGenerator reset - all points available again")
 
+    def __del__(self):
+        """析构函数：关闭数据库连接"""
+        self._close_dedup_database()
+
+    def _close_dedup_database(self) -> None:
+        """Close dedup database connection (delegated to DedupDatabaseManager)."""
+        self._dedup_manager.close()
+
     def get_acqf_instance(self):
-        """【新增】获取缓存的采集函数实例（用于诊断）"""
+        """Get cached acquisition function instance (for diagnostics)."""
         return self._acqf_instance
 
     def _exclude_historical_points_from_history(
         self, sampling_history: torch.Tensor
     ) -> int:
         """
-        从采样历史中排除已使用的历史点
+        Exclude already-used historical points from sampling history.
 
         Args:
-            sampling_history: 采样历史张量 [n_points, n_dim]，包含原始坐标
+            sampling_history: Sampling history tensor [n_points, n_dim]
 
         Returns:
-            int: 排除的历史点数量
+            int: Number of excluded historical points
         """
         if sampling_history is None or len(sampling_history) == 0:
             return 0
 
-        logger.debug(f"[PoolGen] 检查采样历史中的 {len(sampling_history)} 个点")
-
-        # 将历史采样点匹配到设计空间索引
+        # Match historical points to pool indices
         excluded_indices = self._match_points_to_pool_indices(sampling_history)
 
-        # 更新已使用索引集合
+        # Update used indices set
         original_used_count = len(self._used_indices)
         self._used_indices.update(excluded_indices)
         newly_excluded = len(self._used_indices) - original_used_count
 
+        # 【修复】同步更新 _historical_points 以确保双重排除机制一致
+        # 这样 get_available_indices() 的两个排除检查都能正确工作
         if newly_excluded > 0:
-            logger.debug(f"[PoolGen] 新排除历史点索引: {sorted(excluded_indices)}")
+            sampling_history_np = (
+                sampling_history.cpu().numpy()
+                if sampling_history.is_cuda
+                else sampling_history.numpy()
+            )
+            for point in sampling_history_np:
+                self._historical_points.add(tuple(point))
+
+        if newly_excluded > 0:
+            logger.bind(
+                history_count=len(sampling_history), excluded_count=newly_excluded
+            ).debug("历史点已排除")
 
         return newly_excluded
 
     def _get_sampling_history_from_server(self) -> torch.Tensor:
         """
-        系统级自动获取AEPsych服务器的采样历史
+        Get sampling history from server, filtered to pool-matched points only.
 
-        通过反向查找获取服务器实例，并从数据库中读取原始采样坐标
-        这样即使只通过INI配置也能自动工作
+        RATIONALE: Server database may contain points generated by AEPsych's internal
+        mechanisms (e.g., auto-generated warmup, alternative generators) that don't
+        match the pool. These points cannot be used and would trigger unnecessary
+        parameter correction. We filter to only include points that can be matched
+        to pool indices.
 
         Returns:
-            torch.Tensor: 采样历史张量 [n_points, n_dim] 或 None
+            torch.Tensor: Sampling history [n_points, n_dim] or None
         """
-        try:
-            # 尝试获取服务器实例 - 通过多种方式查找
-            server = self._find_aepsych_server()
-            if server is None:
-                logger.debug("[PoolGen] 无法找到AEPsych服务器实例")
-                return None
+        server = self._find_aepsych_server()
+        if server is None:
+            logger.debug("[PoolGen] Server instance not found")
+            return None
 
-            # 从服务器数据库获取采样历史
-            import sqlite3
-            import pandas as pd
+        # Get raw history from server
+        raw_history = pool_utils.get_sampling_history_from_server(server)
+        if raw_history is None or len(raw_history) == 0:
+            return None
 
-            if not hasattr(server, "db") or server.db is None:
-                logger.debug("[PoolGen] 服务器无数据库连接")
-                return None
+        # Filter to only points that match the pool
+        # We need to check each history point individually and keep only matched ones
+        matched_history_points = []
+        tolerance = 1e-6
 
-            # 查询原始采样数据 - 使用实际表名 param_data
-            query = """
-            SELECT param_name, param_value, iteration_id 
-            FROM param_data 
-            ORDER BY iteration_id, param_name
-            """
-
-            result = server.db.execute_sql_query(query, {})
-            rows = result
-
-            if not rows:
-                logger.debug("[PoolGen] 数据库中无采样历史")
-                return None
-
-            # 解析为坐标格式
-            param_dict = {}
-            for param_name, param_value, iteration_id in rows:
-                # 清理参数名的引号（数据库中参数名带引号）
-                clean_param_name = param_name.strip("'\"")
-
-                if iteration_id not in param_dict:
-                    param_dict[iteration_id] = {}
-                param_dict[iteration_id][clean_param_name] = float(param_value)
-
-            # 转换为张量格式 [n_trials, n_dim]
-            if not param_dict:
-                return None
-
-            iteration_ids = sorted(param_dict.keys())
-            param_names = (
-                sorted(param_dict[iteration_ids[0]].keys()) if iteration_ids else []
+        for i, history_point in enumerate(raw_history):
+            # Compute distance to all pool points
+            distances = torch.norm(
+                self.pool_points - history_point.unsqueeze(0), dim=1
             )
+            min_distance, closest_idx = torch.min(distances, dim=0)
 
-            if not param_names:
-                return None
-
-            sampling_data = []
-            for iteration_id in iteration_ids:
-                point = [
-                    param_dict[iteration_id].get(pname, 0.0) for pname in param_names
-                ]
-                sampling_data.append(point)
-
-            if sampling_data:
-                sampling_history = torch.tensor(sampling_data, dtype=torch.float32)
-                logger.debug(
-                    f"[PoolGen] 从服务器获取到 {len(sampling_history)} 个历史采样点"
+            # Keep point if it matches pool within tolerance
+            if min_distance.item() < tolerance:
+                matched_history_points.append(history_point)
+                logger.trace(
+                    f"[PoolGen] History point {i} matched to pool index {closest_idx.item()}"
                 )
-                return sampling_history
+            else:
+                logger.trace(
+                    f"[PoolGen] History point {i} rejected (min dist: {min_distance.item():.2e})"
+                )
 
-        except Exception as e:
-            logger.debug(f"[PoolGen] 获取采样历史失败: {e}")
+        if not matched_history_points:
+            logger.debug(
+                f"[PoolGen] Server history has {len(raw_history)} points, "
+                f"but none match the pool (all non-pool points excluded)"
+            )
+            return None
 
-        return None
+        # Convert list back to tensor
+        filtered_history = torch.stack(matched_history_points)
+
+        logger.debug(
+            f"[PoolGen] Filtered server history: {len(raw_history)} total points → "
+            f"{len(filtered_history)} pool-matched points"
+        )
+        return filtered_history
 
     def _find_aepsych_server(self):
         """
-        智能查找AEPsych服务器实例
-
-        通过多种方式尝试定位当前运行的服务器实例
+        Find AEPsych server instance (delegated to pool_utils).
 
         Returns:
-            AEPsychServer实例或None
+            AEPsychServer instance or None
         """
-        # 优先使用手动设置的服务器实例
+        # Try manual server first
         if self._aepsych_server is not None:
-            logger.debug(f"[PoolGen] 使用手动设置的服务器实例")
             return self._aepsych_server
 
-        try:
-            # 方法1: 通过全局变量查找
-            import sys
-
-            for name, obj in sys.modules.items():
-                if hasattr(obj, "__dict__"):
-                    for attr_name, attr_val in obj.__dict__.items():
-                        if (
-                            hasattr(attr_val, "db")
-                            and hasattr(attr_val, "handle_request")
-                            and "AEPsychServer" in str(type(attr_val))
-                        ):
-                            logger.debug(
-                                f"[PoolGen] 通过模块 {name}.{attr_name} 找到服务器"
-                            )
-                            return attr_val
-
-            # 方法2: 通过调用栈查找
-            import inspect
-
-            for frame_info in inspect.stack():
-                frame_locals = frame_info.frame.f_locals
-                frame_globals = frame_info.frame.f_globals
-
-                # 检查局部变量
-                for var_name, var_val in frame_locals.items():
-                    if (
-                        hasattr(var_val, "db")
-                        and hasattr(var_val, "handle_request")
-                        and "AEPsychServer" in str(type(var_val))
-                    ):
-                        logger.debug(
-                            f"[PoolGen] 通过调用栈局部变量 {var_name} 找到服务器"
-                        )
-                        return var_val
-
-                # 检查全局变量
-                for var_name, var_val in frame_globals.items():
-                    if (
-                        hasattr(var_val, "db")
-                        and hasattr(var_val, "handle_request")
-                        and "AEPsychServer" in str(type(var_val))
-                    ):
-                        logger.debug(
-                            f"[PoolGen] 通过调用栈全局变量 {var_name} 找到服务器"
-                        )
-                        return var_val
-
-        except Exception as e:
-            logger.debug(f"[PoolGen] 查找服务器失败: {e}")
-
-        return None
+        # Try automatic discovery
+        return pool_utils.find_aepsych_server()
 
     def set_aepsych_server(self, server):
-        """直接设置AEPsych服务器实例用于数据库访问"""
+        """Set AEPsych server instance for database access."""
         self._aepsych_server = server
-        logger.debug(f"[PoolGen] 手动设置服务器实例: {type(server)}")
+        logger.bind(server_type=type(server).__name__).trace("服务器实例已配置")
 
     def _match_points_to_pool_indices(self, train_points: torch.Tensor) -> set[int]:
         """
-        将训练点匹配到池中对应的索引
+        Match training points to pool indices (delegated to pool_utils).
 
         Args:
-            train_points: 训练点张量 [n_points, n_dim]
+            train_points: Training points [n_points, n_dim]
 
         Returns:
-            set[int]: 匹配到的池索引集合
+            set[int]: Set of matched pool indices
         """
-        matched_indices = set()
-        tolerance = 1e-6  # 浮点数比较容差
-
-        for train_point in train_points:
-            # 计算与池中所有点的距离
-            distances = torch.norm(self.pool_points - train_point.unsqueeze(0), dim=1)
-            min_distance, closest_idx = torch.min(distances, dim=0)
-
-            # 如果距离足够小，认为是匹配的点
-            if min_distance.item() < tolerance:
-                matched_indices.add(closest_idx.item())
-                logger.debug(
-                    f"[PoolGen] 匹配: 训练点 {train_point.tolist()[:3]}... -> 池索引 {closest_idx.item()} (距离: {min_distance.item():.2e})"
-                )
-            else:
-                logger.warning(
-                    f"[PoolGen] 未匹配: 训练点 {train_point.tolist()[:3]}... (最小距离: {min_distance.item():.2e})"
-                )
-
-        return matched_indices
+        return pool_utils.match_points_to_pool_indices(
+            train_points, self.pool_points
+        )
 
 
 # Register the CustomPoolBasedGenerator with the Config system

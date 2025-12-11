@@ -1,0 +1,221 @@
+================================================================================
+4个核心设计问题 - 快速答案汇总
+================================================================================
+
+【问题1】你的计划是将等差和非等差合成一个Transform？或者共用一个Transform？
+
+答案: 共用一个Ordinal Transform类
+
+理由:
+  ✓ Transform的核心逻辑完全相同: values → rank [0,1,2,...,n-1] → values
+  ✓ bounds处理相同: [-0.5, n-0.5]
+  ✓ GP核函数相同: RBFKernel in rank space
+  ✓ LocalSampler扰动相同: rank空间高斯+舍入
+  ✓ 差异只在配置阶段 (get_config_options的优先级链)
+
+不分离的原因:
+  ✗ 分离会导致代码100%重复 (违反DRY)
+  ✗ AEPsych的模式就是这样: Categorical类也不区分config来源
+
+配置优先级链:
+  Priority 1: values (手工指定, 用于非等差)
+           ↓
+  Priority 2: min/max/step (自动计算, 用于等差)
+           ↓
+  Priority 3: min/max/num_levels (自动等分)
+           ↓
+  Priority 4: levels (字符串标签)
+
+================================================================================
+
+【问题2】你为什么选择rank空间扰动？证据是什么？你确保选定的方式正确工作？
+
+答案: rank空间概念正确，但我的初始实现架构有问题
+
+证据:
+  1. AEPsych中Categorical也使用rank空间 (bounds: [-0.5, n-0.5])
+  2. custom_generators的去重依赖原始值匹配 (pool中存的是值，不是rank)
+  3. LocalSampler.sample()工作在原始值空间，无Transform对象
+
+我最初的错误:
+  ✗ 在LocalSampler中显式调用ordinal_transform._transform/_untransform
+  ✗ 这打破了LocalSampler的独立性 (local_sampler.py不应该关心Transform)
+
+正确的做法:
+  ✓ 初始化LocalSampler时: 从Ordinal提取values，存入_unique_vals_dict[k]
+  ✓ sample()时: 在原始值空间工作，用rank索引保持顺序性 (like Categorical)
+  ✓ 这与Categorical的实现完全一致
+
+参考实现:
+  class LocalSampler:
+      def __init__(self, unique_vals_dict=None):
+          self._unique_vals_dict = unique_vals_dict
+          # {0: array([1, 2, 3, 4, 5]), 1: array([0.01, 0.1, 1, 10, 100]), ...}
+      
+      def _perturb_ordinal(self, center_idx, k, B):
+          unique_vals = self._unique_vals_dict[k]  # 原始值
+          center_val = center_idx[:, k]
+          center_rank = np.where(unique_vals == center_val)[0][0]
+          
+          # 混合策略
+          if use_hybrid and len(unique_vals) <= threshold:
+              samples = np.tile(unique_vals, (B, 1))[:, :self.local_num]
+          else:
+              noise = normal(0, sigma, size=(B, self.local_num))
+              ranks = round(clip(center_rank + noise, 0, len-1))
+              samples = unique_vals[ranks]
+          
+          return samples
+
+这与categorical的_perturb_categorical完全相同的模式！
+
+================================================================================
+
+【问题3】ordinal与int类型的对比，合理吗？还是更接近其他东西？
+
+答案: ordinal与int不同，更接近categorical
+
+对比表:
+┌─────────────┬──────────────────┬──────────┬──────────────┬─────────────┐
+│ 类型        │ 值空间           │ 间距语义 │ Transform    │ 选择理由    │
+├─────────────┼──────────────────┼──────────┼──────────────┼─────────────┤
+│ integer     │ [1,2,3,...,50]   │ 1=2倍关系│ 无           │ 计数、索引  │
+│             │ 间距有数学意义   │ 10=2×5  │ RBF          │ 100合理     │
+├─────────────┼──────────────────┼──────────┼──────────────┼─────────────┤
+│ custom_     │ [1,2,3,4,5]      │ 无固定  │ rank化       │ Likert量表  │
+│ ordinal     │ rank [0,1,2,3,4] │ 关系    │ [-0.5,4.5]   │ 有序偏好    │
+├─────────────┼──────────────────┼──────────┼──────────────┼─────────────┤
+│ categorical │ [red, green, ...] │ 无序    │ rank化       │ 无序选择    │
+│             │ rank [0,1,2,...] │ 无意义  │ [-0.5,n-0.5] │ A/B/C选择   │
+└─────────────┴──────────────────┴──────────┴──────────────┴─────────────┘
+
+为什么ordinal≠integer的例子:
+
+  场景: 5个等级 [1, 2, 3, 4, 5]
+  
+  用integer (错的):
+    - GP学习: 1→2的边际效应 ≈ 4→5的边际效应
+    - 假设: 效应线性 (ERROR! Likert不是线性的)
+    - 结果: 模型学错了
+  
+  用custom_ordinal (对的):
+    - Transform: [1,2,3,4,5] → rank [0,1,2,3,4]
+    - GP学习: 1→2 和 4→5 可能完全不同
+    - 假设: 保留顺序，但灵活拟合非线性
+    - 结果: 模型灵活性高
+
+为什么ordinal≈categorical的架构:
+
+  两者都用rank化:
+    
+    Categorical:
+      values = ["red", "green", "blue"]
+      _transform: red→0, green→1, blue→2
+      _untransform: 0→red, 1→green, 2→blue
+      bounds = [-0.5, 2.5]
+    
+    Ordinal:
+      values = [1, 2, 3, 4, 5]
+      _transform: 1→0, 2→1, 3→2, 4→3, 5→4
+      _untransform: 0→1, 1→2, 2→3, 3→4, 4→5
+      bounds = [-0.5, 4.5]
+    
+    ← 完全相同的架构！
+
+================================================================================
+
+【问题4】数据类型是什么？float64？等差数列有整数也有小数，必须考虑
+
+答案: 必须全程使用float64，避免精度丢失
+
+精度问题的例子:
+
+  等差数列: min=0, max=1.0, step=0.1
+  
+  用float32计算:
+    np.arange(0, 1.0, 0.1, dtype=np.float32)
+    → [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, ???]
+    → 可能少了1.0 (精度不足)
+    → ranks错误: 10个值变成9个!
+  
+  用float64计算:
+    np.arange(0, 1.0, 0.1, dtype=np.float64)
+    → [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+    → 精确，ranks正确: 11个值 → ranks [0,1,2,...,10]
+
+AEPsych的做法:
+
+  aepsych/transforms/parameters.py:
+    bounds = torch.tensor(..., dtype=torch.double)  # float64
+  
+  aepsych/transforms/ops/categorical.py:
+    bounds = torch.tensor([[-0.5], [n-0.5]], dtype=torch.double)
+
+所以Ordinal也必须这样做:
+
+  class Ordinal(Transform):
+      def __init__(self, values):
+          # 强制float64
+          self.values = np.array(values, dtype=np.float64)
+          self.bounds = torch.tensor(
+              [[-0.5], [len(values)-0.5]],
+              dtype=torch.double  # float64
+          )
+      
+      @staticmethod
+      def _compute_arithmetic_sequence(min_val, max_val, step=None, num_levels=None):
+          # 用float64计算
+          if step:
+              values = np.arange(min_val, max_val + step/2, step, dtype=np.float64)
+              values = np.round(values, decimals=12)  # 舍入避免浮点误差
+          else:
+              values = np.linspace(min_val, max_val, num_levels, dtype=np.float64)
+          return values
+
+检查点:
+
+  ✓ Ordinal.__init__强制float64
+  ✓ _compute_arithmetic_sequence输出float64
+  ✓ bounds用torch.double
+  ✓ _transform/_untransform处理float32→float64转换
+  ✓ custom_pool_based_generator提取ordinal.values保持float64
+  ✓ LocalSampler._unique_vals_dict[k]保持float64
+  ✓ 去重时用np.isclose(rtol/atol)比较
+
+混合配置的例子:
+
+  [integer_param]
+  par_type = integer
+  
+  [ordinal_param]
+  par_type = custom_ordinal
+  min_value = 1.0
+  max_value = 5.0
+  step = 0.5
+  # values = [1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0]
+  # ↑ 必须float64，否则可能丢掉末尾值!
+
+================================================================================
+
+总结: 4个决策
+================================================================================
+
+1. 等差/非等差
+   ✓ 单一Ordinal类，优先级链配置
+   ✓ 不分离，避免代码重复
+
+2. rank空间扰动
+   ✓ 概念正确，但架构改进
+   ✓ 从_unique_vals_dict在原始值空间工作（like Categorical）
+   ✓ 不在LocalSampler中显式调用Transform
+
+3. ordinal vs int
+   ✓ 保持分离，ordinal更接近categorical
+   ✓ 原因: 间距无固定语义，需要rank化
+
+4. 数据类型
+   ✓ 强制float64全程
+   ✓ 避免等差数列精度丢失
+   ✓ 与aepsych的torch.double政策一致
+
+================================================================================

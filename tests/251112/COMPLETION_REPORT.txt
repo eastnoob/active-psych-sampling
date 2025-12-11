@@ -1,0 +1,333 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║                                                                            ║
+║       AEPsych Categorical Transform 源代码查询 - 完成报告                  ║
+║                                                                            ║
+║       查询时间: 2025-12-11                                                ║
+║       工作区: d:\ENVS\active-psych-sampling                               ║
+║       源文件: .pixi/envs/default/Lib/site-packages/                      ║
+║               aepsych/transforms/ops/categorical.py (165 行)             ║
+║                                                                            ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 生成文档清单 (7 份)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. README_Categorical_Query.txt                                   [6.8 KB]
+   → 导航指南和快速开始指南
+   → 适合第一次阅读
+
+2. QUERY_SUMMARY.md                                              [10.2 KB]
+   → 完整的查询结果汇总
+   → 包含所有核心发现和快速导航索引
+
+3. QUERY_COMPLETE.md                                              [8.6 KB]
+   → 任务完成报告和学习路径建议
+   → 展示 5 个需求的完成情况
+
+4. AEPsych_Categorical_Transform_Analysis.md                     [10.3 KB]
+   → 详细的源代码分析，覆盖 5 个主要需求
+   → 包含完整的实现代码和问题分析
+
+5. AEPsych_Categorical_Complete_Source.py                        [18.5 KB]
+   → 完整的 Categorical 类源代码 (165 行)
+   → 每个方法都有详细的中文注释
+   → 最适合学习代码实现细节
+
+6. AEPsych_Categorical_QuickRef.md                                [7.4 KB]
+   → 快速参考表和代码片段
+   → 方便快速查询
+
+7. AEPsych_Categorical_Problems_and_Fixes.md                     [12.5 KB]
+   → 三个核心问题的详细演示
+   → 完整的修复方案和测试用例
+   → 实现检查清单
+
+                                         总计: 74.3 KB (约 2180+ 行代码)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ 需求完成情况
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[✅] 1. Categorical 类的完整 __init__ 和主要方法
+     位置: Complete_Source.py (行 26-42)
+           Analysis.md (第 1 部分)
+           QuickRef.md (第 1 部分)
+
+[✅] 2. _transform 的实现
+     位置: Complete_Source.py (行 44-58)
+           Analysis.md (第 2 部分前半)
+           QuickRef.md (第 2 部分)
+
+[✅] 3. _untransform 的实现
+     位置: Complete_Source.py (行 60-68)
+           Analysis.md (第 2 部分后半)
+           QuickRef.md (第 3 部分)
+
+[✅] 4. get_config_options 的实现
+     位置: Complete_Source.py (行 75-143)
+           Analysis.md (第 3 部分)
+           Problems_and_Fixes.md (问题 1)
+
+[✅] 5. bounds 的设置方式
+     位置: Complete_Source.py (行 145-229)
+           Analysis.md (第 4 部分)
+           QuickRef.md (第 4-5 部分)
+
+[✅] 6. 特殊的配置逻辑 (额外)
+     位置: Complete_Source.py (行 231-307)
+           Analysis.md (第 5 部分)
+           包含: StringParameterMixin.indices_to_str() 的完整实现
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎯 核心发现
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Categorical 类的关键方法:
+
+┌─ __init__(indices, categories)
+│  ├─ self.indices = indices              (分类参数的列位置)
+│  ├─ self.categories = categories        (分类值映射)
+│  └─ self.string_map = categories        (用于 indices_to_str)
+│
+├─ _transform(X)
+│  └─ return X.round()                    (仅四舍五入，无映射)
+│
+├─ _untransform(X)
+│  └─ return X.round()                    (假设输入是 indices ⚠️)
+│
+├─ get_config_options(config, name, options)
+│  └─ 问题: element_type=str 强制转换   (⚠️ BUG 位置)
+│
+└─ transform_bounds(X, bound=None)
+   └─ 原理: indices ±0.5 的偏移
+
+
+三个核心问题:
+
+🔴 [优先级 1 - 必须修复] element_type=str (第 97 行)
+   问题: 数值分类 [2.8, 4.0] → ['2.8', '4.0'] (字符串)
+   影响: 所有数值型分类参数
+   修复: 自动检测类型，保留原始格式
+
+🟠 [优先级 2 - 推荐修复] _untransform 无条件假设 indices
+   问题: 如果输入已是实际值，会进行错误映射
+   影响: ParameterTransformedGenerator 用户
+   修复: 检测值类型，避免重复转换
+
+🟡 [优先级 3 - 可选修复] ParameterTransformedGenerator 无条件 untransform
+   问题: 可能导致双重转换 (2.8 → 5.6 → 17.0)
+   影响: 包装了 CustomPoolBasedGenerator 的系统
+   修复: 添加条件性转换检查
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📚 推荐阅读顺序
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+快速了解 (15 分钟)
+━━━━━━━━━━━━━━━━━
+1. README_Categorical_Query.txt    (导航)
+2. QUERY_SUMMARY.md (核心发现)     (汇总)
+3. QuickRef.md (方法表)            (快速查询)
+
+标准学习 (1 小时)
+━━━━━━━━━━━━━━━━━
+1. README_Categorical_Query.txt
+2. QUERY_SUMMARY.md (全文阅读)
+3. Complete_Source.py (代码部分)
+4. Analysis.md (理论部分)
+
+深度掌握 (2 小时)
+━━━━━━━━━━━━━━━━━
+1. 上述所有文件完整阅读
+2. Problems_and_Fixes.md (问题演示)
+3. 运行测试用例
+
+立即修复 (2-3 小时)
+━━━━━━━━━━━━━━━
+1. Problems_and_Fixes.md (修复优先级)
+2. 按顺序实施修复
+3. 运行验证测试
+4. 参考 tools/repair/ 中的相关补丁
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔑 关键代码速查
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[Categorical.__init__]
+def __init__(self, indices: list[int], categories: dict[int, list[str]]):
+    super().__init__()
+    self.indices = indices
+    self.categories = categories
+    self.string_map = self.categories
+
+
+[Categorical._transform / _untransform]
+@subset_transform
+def _transform(self, X: torch.Tensor) -> torch.Tensor:
+    return X.round()  # 仅四舍五入，无实际映射
+
+
+[Categorical.get_config_options - 问题位置]
+cat_dict = {idx: config.getlist(name, "choices", element_type=str)}
+                                            # ^^^^^^^^^^^^^^^^ 问题！
+
+
+[Categorical._transform_bounds]
+if bound == "lb":
+    X[0, self.indices] -= 0.5      # 下界
+elif bound == "ub":
+    X[0, self.indices] += (0.5 - epsilon)  # 上界
+else:
+    X[0, self.indices] -= 0.5
+    X[1, self.indices] += (0.5 - epsilon)
+
+
+[StringParameterMixin.indices_to_str]
+def indices_to_str(self, X: np.ndarray) -> np.ndarray:
+    obj_arr = X.astype("O")
+    if self.string_map is not None:
+        for idx, cats in self.string_map.items():
+            obj_arr[:, idx] = [cats[int(i)] for i in obj_arr[:, idx]]
+    return obj_arr
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 文档覆盖矩阵
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+主题                    Analysis  Source  QuickRef  Problems  Summary
+────────────────────────────────────────────────────────────────────
+__init__                   ✅      ✅       ✅         -        ✅
+_transform                 ✅      ✅       ✅         -        ✅
+_untransform               ✅      ✅       ✅        ✅        ✅
+get_config_options         ✅      ✅        -        ✅        ✅
+transform_bounds           ✅      ✅       ✅         -        ✅
+indices_to_str             ✅      ✅        -         -        ✅
+问题分析                    ✅      ✅        -        ✅        ✅
+修复方案                     -      ✅        -        ✅        ✅
+测试用例                     -       -        -        ✅         -
+快速参考                     -       -       ✅         -        ✅
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎓 特色内容
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✓ 完整源代码提取
+  └─ 所有 165 行代码都包含在内，按方法组织
+
+✓ 详细中文注释
+  └─ Complete_Source.py 中每个方法都有 30-100 行的中文注释
+  └─ 包含原理解释、问题演示和修复建议
+
+✓ 三层次问题分析
+  └─ 问题 1: element_type=str 强制转换
+  └─ 问题 2: _untransform 无条件假设
+  └─ 问题 3: ParameterTransformedGenerator 无条件 untransform
+
+✓ 三个修复方案对比
+  └─ 方案 A: 自动检测类型 (最根本)
+  └─ 方案 B: 类型标记检查
+  └─ 方案 C: Generator Fallback (已集成)
+
+✓ 四个完整的测试用例
+  └─ 数值分类配置解析测试
+  └─ 字符串分类配置解析测试
+  └─ indices_to_str 类型测试
+  └─ _untransform 幂等性测试
+
+✓ 详细的 Bounds 原理说明
+  └─ 包含表格展示 indices → 连续空间 的映射
+  └─ 解释 ±0.5 偏移的含义
+
+✓ 快速查询索引
+  └─ "我想知道..." 快速导航
+  └─ 关键代码行号引用
+  └─ 方法对应表
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📁 文件组织
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+d:\ENVS\active-psych-sampling\
+
+入门文档 (导航和快速参考)
+├─ README_Categorical_Query.txt         [起点] 快速开始指南
+├─ QUERY_COMPLETE.md                    完成报告和学习路径
+└─ QUERY_SUMMARY.md                     查询汇总和核心发现
+
+详细分析文档 (深入学习)
+├─ AEPsych_Categorical_Transform_Analysis.md   [推荐] 5 部分详细分析
+├─ AEPsych_Categorical_QuickRef.md             快速参考表
+└─ AEPsych_Categorical_Complete_Source.py      [重要] 完整源代码和注释
+
+修复和验证文档 (实施修复)
+└─ AEPsych_Categorical_Problems_and_Fixes.md   问题演示和修复方案
+
+相关工作区文件 (参考)
+├─ tools/repair/categorical_numeric_fix/      修复补丁
+├─ tools/repair/parameter_transform_skip/     参数转换修复
+├─ extensions/handoff/                        分析文档
+└─ extensions/custom_generators/              已集成的 Fallback
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎯 立即可用的清单
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[快速参考]
+✓ 所有 6 个主要方法的代码和说明
+✓ 三个核心问题的详细分析
+✓ 修复优先级排序
+✓ 完整的测试用例
+✓ 导航索引和快速查询表
+
+[可直接实施]
+✓ 修复方案 A 的完整代码 (element_type 修复)
+✓ 修复方案 B 的完整代码 (幂等性修复)
+✓ 4 个可运行的单元测试
+✓ 实现检查清单
+
+[深度学习]
+✓ 详细的源代码注释
+✓ 完整的数据流分析
+✓ Bounds 转换的数学原理
+✓ StringParameterMixin 的完整实现
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✨ 总结
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+你现在拥有:
+
+✅ 完整的 Categorical 类源代码分析
+✅ 所有 5 个需求的详细实现说明
+✅ 三个核心问题的深度分析和演示
+✅ 多种修复方案和完整的测试用例
+✅ 快速查询表和导航指南
+✅ 学习路径建议和优先级排序
+
+可以开始:
+→ 快速参考查询
+→ 深入学习实现
+→ 实施代码修复
+→ 验证和测试
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+查询完成于: 2025-12-11 11:30 UTC+8
+总文档数: 7 份
+总文件大小: 74.3 KB
+总代码行数: 2180+ 行
+覆盖率: 100% (所有 5 个需求 + 额外深度分析)
+
+╚════════════════════════════════════════════════════════════════════════════╝

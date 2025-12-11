@@ -1,0 +1,18 @@
+--- a/aepsych/transforms/ops/__init__.py
++++ b/aepsych/transforms/ops/__init__.py
+@@ -8,12 +8,14 @@
+ from .categorical import Categorical
+ from .fixed import Fixed
+ from .log10_plus import Log10Plus
+ from .normalize_scale import NormalizeScale
++from .ordinal import Ordinal
+ from .round import Round
+
+ __all__ = [
+     "Categorical",
+     "Fixed",
+     "Log10Plus",
+     "NormalizeScale",
++    "Ordinal",
+     "Round",
+ ]

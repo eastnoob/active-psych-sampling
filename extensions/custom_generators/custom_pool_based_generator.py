@@ -695,17 +695,17 @@ class CustomPoolBasedGenerator(AcqfGenerator):
                     # 获取choices字符串
                     choices_str = config.get(par_name, "choices")
                     log_debug(f"  choices_str: {choices_str}")
-                    
+
                     # Parse choices (真值列表)
                     import ast
                     choices_values = ast.literal_eval(choices_str)
                     log_debug(f"  choices_values (actual values): {choices_values}")
                     log_debug(f"  choices_values type: {type(choices_values)}")
-                    
+
                     # 【修复】区分numeric和string类型
                     n_choices = len(choices_values)
                     indices = list(range(n_choices))  # 0, 1, 2, ...
-                    
+
                     # 检测是否为numeric choices
                     is_numeric = all(isinstance(v, (int, float)) for v in choices_values)
 
@@ -721,7 +721,7 @@ class CustomPoolBasedGenerator(AcqfGenerator):
                         log_debug(f"  ✓ String categorical: using indices {float_indices} (will be transformed to {choices_values})")
 
                     param_choices_indices.append(indices)
-                    
+
                     param_info.append({
                         "name": par_name,
                         "type": par_type,
@@ -729,19 +729,111 @@ class CustomPoolBasedGenerator(AcqfGenerator):
                         "indices": indices,
                         "is_numeric": is_numeric
                     })
-                    
+
                     log_debug(f"  映射关系: {dict(zip(indices, choices_values))}")
-                    
+
                 except Exception as e:
                     log_debug(f"  ERROR parsing choices: {e}")
                     import traceback
                     log_debug(f"  Traceback: {traceback.format_exc()}")
                     raise ValueError(f"无法解析参数 {par_name} 的choices: {e}")
+
+            elif par_type in ("ordinal", "custom_ordinal", "custom_ordinal_mono"):
+                try:
+                    import ast
+                    import numpy as np
+
+                    log_debug(f"  处理 ordinal 参数")
+
+                    # 优先级1: 直接指定values
+                    if config.has_option(par_name, "values"):
+                        values_str = config.get(par_name, "values")
+                        log_debug(f"  values_str: {values_str}")
+                        ordinal_values = ast.literal_eval(values_str)
+                        ordinal_values = list(ordinal_values)
+                        log_debug(f"  ✓ 使用直接指定的values: {ordinal_values}")
+
+                    # 优先级2: min_value + max_value + (step 或 num_levels)
+                    elif config.has_option(par_name, "min_value") and config.has_option(par_name, "max_value"):
+                        min_val = float(config.get(par_name, "min_value"))
+                        max_val = float(config.get(par_name, "max_value"))
+
+                        if config.has_option(par_name, "step"):
+                            step = float(config.get(par_name, "step"))
+                            num_steps = int(round((max_val - min_val) / step)) + 1
+                            ordinal_values = list(np.linspace(min_val, max_val, num_steps))
+                            log_debug(f"  ✓ 使用 min/max/step: [{min_val}, ..., {max_val}], step={step}")
+                        elif config.has_option(par_name, "num_levels"):
+                            num_levels = int(config.get(par_name, "num_levels"))
+                            ordinal_values = list(np.linspace(min_val, max_val, num_levels))
+                            log_debug(f"  ✓ 使用 min/max/num_levels: [{min_val}, ..., {max_val}], levels={num_levels}")
+                        else:
+                            raise ValueError(
+                                f"参数 {par_name}: 指定了 min_value/max_value，"
+                                "但缺少 'step' 或 'num_levels'"
+                            )
+
+                    # 优先级3: levels (字符串标签，映射到整数序列)
+                    elif config.has_option(par_name, "levels"):
+                        levels_str = config.get(par_name, "levels")
+                        if isinstance(levels_str, str):
+                            # 尝试解析为列表，如果失败则按逗号分割
+                            try:
+                                levels = ast.literal_eval(levels_str)
+                            except (ValueError, SyntaxError):
+                                levels = [s.strip() for s in levels_str.split(',')]
+                        else:
+                            levels = levels_str
+
+                        # 字符串标签映射到整数序列
+                        ordinal_values = list(range(len(levels)))
+                        log_debug(f"  ✓ 使用 levels（字符串标签）: {levels} → {ordinal_values}")
+
+                    else:
+                        raise ValueError(
+                            f"参数 {par_name} (type={par_type}): 必须指定以下之一:\n"
+                            "  1. 'values' (直接列表)\n"
+                            "  2. 'min_value' + 'max_value' + ('step' 或 'num_levels')\n"
+                            "  3. 'levels' (字符串标签)"
+                        )
+
+                    # 确保值是排序的
+                    if ordinal_values != sorted(ordinal_values):
+                        log_debug(f"  WARNING: values 未排序，将自动排序")
+                        ordinal_values = sorted(ordinal_values)
+
+                    # 验证至少有2个值
+                    if len(ordinal_values) < 2:
+                        raise ValueError(
+                            f"参数 {par_name}: ordinal 参数至少需要2个值，"
+                            f"但只有 {len(ordinal_values)} 个"
+                        )
+
+                    # 将 ordinal 值转换为 float 并添加到 pool
+                    float_values = [float(v) for v in ordinal_values]
+                    param_choices_values.append(float_values)
+
+                    log_debug(f"  ordinal values: {ordinal_values}")
+                    log_debug(f"  ✓ Ordinal parameter: {len(ordinal_values)} levels")
+
+                    param_info.append({
+                        "name": par_name,
+                        "type": par_type,
+                        "actual_values": ordinal_values,
+                        "is_numeric": True  # ordinal 总是数值型
+                    })
+
+                except Exception as e:
+                    log_debug(f"  ERROR parsing ordinal: {e}")
+                    import traceback
+                    log_debug(f"  Traceback: {traceback.format_exc()}")
+                    raise ValueError(f"无法解析参数 {par_name} 的 ordinal 配置: {e}")
+
             else:
-                log_debug(f"  ERROR: 参数类型不是categorical")
+                log_debug(f"  ERROR: 参数类型不支持")
                 raise ValueError(
-                    f"参数 {par_name} 不是categorical类型(type={par_type}),自动pool生成仅支持categorical参数。"
-                    f"如需连续参数,请手动提供pool_points。"
+                    f"参数 {par_name} 类型为 {par_type}，自动pool生成仅支持 categorical 和 ordinal 参数。"
+                    f"如需连续参数，请手动提供 pool_points。"
                 )
         
         # 【修复】使用indices生成笛卡尔积（所有categorical参数统一使用indices）
@@ -766,7 +858,8 @@ class CustomPoolBasedGenerator(AcqfGenerator):
             log_debug(f"    类型: {info['type']}")
             log_debug(f"    数值型: {info.get('is_numeric', 'N/A')}")
             log_debug(f"    真值: {info['actual_values']}")
-            log_debug(f"    索引: {info['indices']}")
+            if 'indices' in info:  # Only categorical has indices
+                log_debug(f"    索引: {info['indices']}")
         log_debug(f"\n  总组合数: {len(combinations)}")
         log_debug(f"  Pool tensor shape: {pool_array.shape}")
         log_debug(f"  Pool前5行:\n{pool_array[:5]}")
@@ -780,8 +873,8 @@ class CustomPoolBasedGenerator(AcqfGenerator):
         # Format: {param_idx: {0: 2.8, 1: 4.0, 2: 8.5}}
         categorical_mappings = {}
         for i, info in enumerate(param_info):
-            # 只为numeric categorical存储映射(string categorical不需要)
-            if info.get('is_numeric', False):
+            # 只为numeric categorical存储映射(string categorical和ordinal不需要)
+            if info.get('is_numeric', False) and 'indices' in info:
                 mapping = dict(zip(info['indices'], info['actual_values']))
                 categorical_mappings[i] = mapping
                 log_debug(f"  Stored mapping for {info['name']} (param_idx={i}): {mapping}")

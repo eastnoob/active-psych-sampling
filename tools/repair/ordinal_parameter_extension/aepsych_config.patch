@@ -1,0 +1,16 @@
+--- a/aepsych/config.py
++++ b/aepsych/config.py
+@@ -95,10 +95,12 @@
+         valid_par_types = [
+             "continuous",
+             "integer",
+             "binary",
+             "categorical",
+             "fixed",
++            "custom_ordinal",      # 新增: 等差有序参数
++            "custom_ordinal_mono", # 新增: 非等差单调参数
+         ]
+
+         for par_name in self.parnames:
+             par_type = self.get(par_name, "par_type", fallback="continuous")
+             if par_type not in valid_par_types:

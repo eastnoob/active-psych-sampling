@@ -1,0 +1,40 @@
+--- a/aepsych/transforms/parameters.py
++++ b/aepsych/transforms/parameters.py
+@@ -1,6 +1,7 @@
+ # aepsych/transforms/parameters.py
+
+ from aepsych.transforms.ops import Categorical, Round
++from aepsych.transforms.ops.ordinal import Ordinal
+
+ class ParameterTransforms:
+     @classmethod
+@@ -240,6 +241,30 @@
+                 transform_dict[f"{par}_Categorical"] = categorical
+                 continue
+
++        elif par_type in ["custom_ordinal", "custom_ordinal_mono"]:
++            # Ordinal参数: 有序但非均匀分布
++            # 使用Ordinal Transform处理
++            try:
++                ordinal = Ordinal.from_config(
++                    config=config,
++                    name=par,
++                    options=transform_options
++                )
++            except Exception as e:
++                raise ValueError(
++                    f"Failed to create Ordinal transform for parameter '{par}': {e}"
++                )
++
++            # 更新bounds到规范化空间 [0, 1]
++            original_bounds = transform_options.get("bounds")
++            if original_bounds is not None:
++                transform_options["bounds"] = ordinal.transform_bounds(
++                    original_bounds
++                )
++
++            transform_dict[f"{par}_Ordinal"] = ordinal
++            continue  # 跳过log_scale和normalize (已在规范化空间)
++
+         # 处理其他参数类型...
+         # (integer, continuous等)

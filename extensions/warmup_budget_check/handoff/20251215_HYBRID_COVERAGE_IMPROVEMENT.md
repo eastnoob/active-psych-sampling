@@ -17,6 +17,7 @@ free_exploration = np.random.choice(remaining_available, size=n_free, replace=Fa
 ```
 
 **缺陷**：
+
 - 覆盖度无保证，只有概率性（60-70%）
 - 对未保护的交互对（如5,6）的值组合覆盖不确定
 - 不同运行的采样质量波动大
@@ -37,6 +38,7 @@ free_exploration = self._select_covering_configs(
 ```
 
 实现 `_select_covering_configs()`：
+
 - 目标：确保每个因子的每个水平至少出现1次
 - 目标：确保因子对的主要值组合尽可能被覆盖
 - 方法：贪心算法（逐个选择能最大增加覆盖度的配置）
@@ -67,11 +69,13 @@ free_exploration = self._select_covering_configs(
 ## 🎯 优先级判断
 
 **为什么推荐**：
+
 - ✅ 简单改进，代码改动小
 - ✅ 高收益，覆盖度提升17-25%
 - ✅ 无风险，纯优化，不改变算法结构
 
 **何时实施**：
+
 - 如果在乎未保护交互的发现概率 → 立即做
 - 如果现有随机结果满足 → 可延后
 
@@ -84,6 +88,6 @@ free_exploration = self._select_covering_configs(
 - 计算复杂度：O(n²) 可接受（n~20）
 
 **相关代码**：
+
 - L650-730：_select_interaction_aware_configs() 的保护阶段逻辑
 - L577：_select_lhs_global() 的差异最大化方法参考
-

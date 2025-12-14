@@ -13,6 +13,7 @@ import pandas as pd
 import numpy as np
 import argparse
 import sys
+import re
 from pathlib import Path
 
 
@@ -30,20 +31,24 @@ class WarmupBudgetEstimator:
 
         # 检测因子列（排除常见的响应变量列名）
         response_col_patterns = [
-            "y",
-            "response",
-            "outcome",
-            "result",
-            "target",
-            "label",
-            "class",
-            "category",
+            r"^y$",  # 只有单独的y列
+            r"^response$",
+            r"^outcome$",
+            r"^result$",
+            r"^target$",
+            r"^label$",
+            r"^class$",
+            r"^category$",
+            r".*_id$",  # 以_id结尾的列
+            r"^condition.*",  # 以condition开头的列
         ]
 
         self.factor_names = [
             col
             for col in self.design_df.columns
-            if not any(pattern in col.lower() for pattern in response_col_patterns)
+            if not any(
+                re.search(pattern, col.lower()) for pattern in response_col_patterns
+            )
         ]
 
         if not self.factor_names:
@@ -127,25 +132,68 @@ class WarmupBudgetEstimator:
 
         # 计算最小需求
         max_levels = max([len(self.design_df[f].unique()) for f in self.factor_names])
-        n_core2a_min = max(
-            int(max_levels * 7 * 0.75), self.d * 3  # D-optimal效率折扣  # 每因子至少3次
-        )
-        n_core2b_min = 25 if not skip_interaction else 0  # 5对×5次
-        n_boundary_min = 2 * self.d  # 每因子至少2个极值点
 
-        # 按比例分配剩余预算
-        if not skip_interaction:
-            # 包含Core-2b的情况：40% / 28% / 32%
-            n_core2a = max(int(remaining_budget * 0.40), n_core2a_min)
-            n_core2b = max(int(remaining_budget * 0.28), n_core2b_min)
+        # ======================== 核心思路转变 ========================
+        # 从"基于百分比分配"改为"基于最小配置数的绝对值约束"
+        # 原理：
+        # - Core-2a、Core-2b、探索都有最小配置数需求（不是百分比）
+        # - 剩余预算足以满足最小值后，再按比例分配超出部分
+        # ============================================================
+
+        # 1. 基于因子数计算各模块的最小配置数（绝对值）
+        # Core-2a最小值：主效应覆盖 = 因子数 × 因子内不同水平的测试次数
+        # 保守估计：每个因子至少3-5个配置来探索效应
+        n_core2a_min_abs = max(
+            15,  # 绝对最小值
+            int(
+                self.d * 3 * (0.3 + n_subjects / 20.0)
+            ),  # 随被试增长：3人=0.45*d, 8人=0.7*d
+        )
+
+        # Core-2b最小值：交互项覆盖
+        # 交互对数 ≈ C(d,2) = d*(d-1)/2 = 15对（6因子情况）
+        # 每对至少2-3个配置 → 15*2 = 30个最少
+        n_core2b_min_abs = (
+            max(15, int(self.d * (self.d - 1) * 0.7))  # 约15对×0.7个配置 ≈ 10-12
+            if not skip_interaction
+            else 0
+        )
+
+        # 探索预算最小值：至少覆盖边界和充分的随机点
+        # 边界 ≈ 2^d的顶点 = 64（6因子），实际通常只取部分
+        # 最小值：d*2 = 12个边界 + d*2 = 12个LHS = 24个最少
+        n_explore_min_abs = max(20, int(self.d * 3.5))  # 绝对最小值  # 6因子≈21
+
+        # 2. 检查剩余预算是否足以满足最小值
+        min_sum = n_core2a_min_abs + n_core2b_min_abs + n_explore_min_abs
+
+        if remaining_budget < min_sum:
+            # 预算紧张：按比例缩减，但优先保护探索和Core-2a
+            scale_factor = remaining_budget / min_sum
+            n_core2a = max(8, int(n_core2a_min_abs * scale_factor))
+            n_core2b = (
+                max(6, int(n_core2b_min_abs * scale_factor))
+                if not skip_interaction
+                else 0
+            )
             n_explore = remaining_budget - n_core2a - n_core2b
         else:
-            # 跳过Core-2b的情况：重新分配比例为 55% / 45%
-            n_core2a = max(int(remaining_budget * 0.55), n_core2a_min)
-            n_core2b = 0
-            n_explore = remaining_budget - n_core2a
+            # 预算充足：按最小值 + 按比例分配超出部分
+            surplus = remaining_budget - min_sum
 
-        # 分配探索预算：边界40%，LHS60%
+            if not skip_interaction:
+                # 比例：Core-2a 40% / Core-2b 30% / Explore 30%
+                n_core2a = n_core2a_min_abs + int(surplus * 0.40)
+                n_core2b = n_core2b_min_abs + int(surplus * 0.30)
+                n_explore = remaining_budget - n_core2a - n_core2b
+            else:
+                # 没有Core-2b：比例 55% / 45%
+                n_core2a = n_core2a_min_abs + int(surplus * 0.55)
+                n_core2b = 0
+                n_explore = remaining_budget - n_core2a
+
+        # 3. 分配探索预算：边界40%，LHS60%
+        n_boundary_min = max(2 * self.d, int(3 * min(1.0, n_subjects / 3.0)))
         n_boundary = max(n_boundary_min, int(n_explore * 0.40))
         n_lhs = max(0, n_explore - n_boundary)
 
@@ -305,82 +353,84 @@ class WarmupBudgetEstimator:
             )
 
         # === 维度3：结构平衡性 ===
-        # 3.1 Core-1预算比例（仅在预算较小时才关注占比）
-        # Core-1的关键是：8个配置 + 足够的被试数，而不是占比
-        if trials_per_subject <= 50:
-            # 小预算场景：Core-1占比很重要
-            if core1_ratio < 0.25:
-                issues.append(f"Core-1预算不足：{core1_ratio*100:.1f}%（需要≥25%）")
-            elif core1_ratio < 0.28:
-                warnings.append(f"Core-1预算偏低：{core1_ratio*100:.1f}%（建议28-35%）")
-            elif core1_ratio <= 0.35:
-                strengths.append(f"Core-1预算比例合理：{core1_ratio*100:.1f}%")
-            elif core1_ratio <= 0.40:
-                warnings.append(f"Core-1预算偏高：{core1_ratio*100:.1f}%（建议28-35%）")
-            else:
-                excess_warnings.append(
-                    f"Core-1预算过高：{core1_ratio*100:.1f}%（>40%浪费在重复上，建议降低被试数或增加trials）"
-                )
-        else:
-            # 大预算场景：看绝对配置数而不是占比
-            if budget["core1_configs"] < 6:
-                issues.append(
-                    f"Core-1配置数不足：仅{budget['core1_configs']}个（需要≥6个）"
-                )
-            elif budget["core1_configs"] <= 10:
-                strengths.append(
-                    f"Core-1配置数合理：{budget['core1_configs']}个，占比{core1_ratio*100:.1f}%"
-                )
-            else:
-                excess_warnings.append(
-                    f"Core-1配置数过多：{budget['core1_configs']}个（占用{core1_ratio*100:.1f}%预算，建议降低）"
-                )
+        # 改为基于配置数的绝对值评估，并用动态阈值适应被试数变化
+        # 原理：更多被试 → 更多预算 → 更多配置数（是正常现象，不是过度）
 
-        # 3.2 Core-2a预算比例
-        if core2a_ratio < 0.25:
-            issues.append(f"Core-2a预算不足：{core2a_ratio*100:.1f}%（需要≥25%）")
-        elif core2a_ratio < 0.32:
-            warnings.append(f"Core-2a预算偏低：{core2a_ratio*100:.1f}%（建议32-40%）")
-        elif core2a_ratio <= 0.40:
-            strengths.append(f"Core-2a预算合理：{core2a_ratio*100:.1f}%")
-        elif core2a_ratio <= 0.45:
-            warnings.append(f"Core-2a预算偏高：{core2a_ratio*100:.1f}%（建议32-40%）")
+        # 计算动态阈值：随被试数增长而增长
+        # 基础值 + 被试增量
+        base_core2a = 25  # 3人时的目标
+        base_core2b = 20
+        base_explore = 25
+        per_subject_add_2a = 4.0  # 每增加1人，增加4.0个配置
+        per_subject_add_2b = 4.0  # 每增加1人，增加4.0个配置
+        per_subject_add_exp = 4.0
+
+        # 动态阈值（基础 + 被试增量）
+        target_core2a = base_core2a + (n_subjects - 3) * per_subject_add_2a
+        target_core2b = base_core2b + (n_subjects - 3) * per_subject_add_2b
+        target_explore = base_explore + (n_subjects - 3) * per_subject_add_exp
+
+        # 3.1 Core-2a评估：基于动态阈值
+        if budget["core2a_configs"] < 15:
+            issues.append(
+                f"Core-2a不足：仅{budget['core2a_configs']}个配置（需要≥15个）"
+            )
+        elif budget["core2a_configs"] < 20:
+            warnings.append(
+                f"Core-2a偏低：{budget['core2a_configs']}个配置（建议≥20个）"
+            )
+        elif budget["core2a_configs"] < target_core2a * 1.2:
+            strengths.append(f"Core-2a合理：{budget['core2a_configs']}个配置")
+        elif budget["core2a_configs"] < target_core2a * 1.5:
+            warnings.append(f"Core-2a偏高：{budget['core2a_configs']}个配置（可减少）")
         else:
             excess_warnings.append(
-                f"Core-2a预算过高：{core2a_ratio*100:.1f}%（>45%可能过度）"
+                f"Core-2a过度：{budget['core2a_configs']}个配置（预算浪费）"
             )
 
-        # 3.3 Core-2b预算比例（如果包含）
+        # 3.2 Core-2b评估：基于动态阈值
         if not skip_interaction:
-            if core2b_ratio < 0.15:
-                issues.append(f"Core-2b预算不足：{core2b_ratio*100:.1f}%（需要≥15%）")
-            elif core2b_ratio < 0.22:
-                warnings.append(
-                    f"Core-2b预算偏低：{core2b_ratio*100:.1f}%（建议22-28%）"
+            if budget["core2b_configs"] < 10:
+                issues.append(
+                    f"Core-2b不足：仅{budget['core2b_configs']}个配置（需要≥10个）"
                 )
-            elif core2b_ratio <= 0.28:
-                strengths.append(f"Core-2b预算合理：{core2b_ratio*100:.1f}%")
-            elif core2b_ratio <= 0.32:
+            elif budget["core2b_configs"] < 15:
                 warnings.append(
-                    f"Core-2b预算偏高：{core2b_ratio*100:.1f}%（建议22-28%）"
+                    f"Core-2b偏低：{budget['core2b_configs']}个配置（建议≥15个）"
+                )
+            elif budget["core2b_configs"] < target_core2b * 1.2:
+                strengths.append(f"Core-2b合理：{budget['core2b_configs']}个配置")
+            elif budget["core2b_configs"] < target_core2b * 1.5:
+                warnings.append(
+                    f"Core-2b偏高：{budget['core2b_configs']}个配置（可减少）"
                 )
             else:
                 excess_warnings.append(
-                    f"Core-2b预算过高：{core2b_ratio*100:.1f}%（Phase1不需测太多交互）"
+                    f"Core-2b过度：{budget['core2b_configs']}个配置（预算浪费）"
                 )
 
-        # 3.4 探索预算比例（边界+LHS）
-        if explore_ratio < 0.20:
-            issues.append(f"探索预算不足：{explore_ratio*100:.1f}%（需要≥20%）")
-        elif explore_ratio < 0.25:
-            warnings.append(f"探索预算偏低：{explore_ratio*100:.1f}%（建议25-35%）")
-        elif explore_ratio <= 0.35:
-            strengths.append(f"探索预算合理：{explore_ratio*100:.1f}%")
-        elif explore_ratio <= 0.40:
-            warnings.append(f"探索预算偏高：{explore_ratio*100:.1f}%（建议25-35%）")
+        # 3.3 探索预算评估：基于动态阈值
+        explore_configs = budget["boundary_configs"] + budget["lhs_configs"]
+        if explore_configs < 15:
+            issues.append(f"探索不足：仅{explore_configs}个配置（需要≥15个）")
+        elif explore_configs < 20:
+            warnings.append(f"探索偏低：{explore_configs}个配置（建议≥20个）")
+        elif explore_configs < target_explore * 1.2:
+            strengths.append(f"探索合理：{explore_configs}个配置")
+        elif explore_configs < target_explore * 1.5:
+            warnings.append(f"探索偏高：{explore_configs}个配置（可减少）")
+        else:
+            excess_warnings.append(f"探索过度：{explore_configs}个配置（预算浪费）")
+
+        # 3.4 Core-1评估：基于配置数和被试数
+        # Core-1固定8个，关键是被试数足够支持ICC估计
+        if budget["core1_configs"] < 6:
+            issues.append(f"Core-1配置不足：仅{budget['core1_configs']}个（需要≥6个）")
+        elif budget["core1_configs"] <= 10:
+            strengths.append(f"Core-1配置数合理：{budget['core1_configs']}个")
         else:
             excess_warnings.append(
-                f"探索预算过高：{explore_ratio*100:.1f}%（结构化信息可能不足）"
+                f"Core-1配置数过多：{budget['core1_configs']}个（占用{core1_ratio*100:.1f}%）"
             )
 
         # === 综合评估 ===
@@ -516,9 +566,9 @@ class WarmupBudgetEstimator:
         print()
 
         if not skip_interaction:
-            print(f" 3. Core-2b交互初筛（配置池）:")
+            print(f"  3. Core-2b交互初筛（配置池）:")
             print(f"     - 配置数: {budget['core2b_configs']} 个")
-            print(f"     - 说明: 5个交互对，每对5次，分配给各被试")
+            print(f"     - 说明: 交互对感知采样（支持free/specified_only/hybrid模式）")
             print()
         else:
             print(f"  3. Core-2b交互初筛: 已跳过")

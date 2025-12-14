@@ -1,0 +1,335 @@
+Traceback (most recent call last):
+  File "d:\ENVS\active-psych-sampling\tools\repair\extract_pyc_metadata.py", line 83, in extract_from_pyc
+    print(line)
+    ~~~~~^^^^^^
+UnicodeEncodeError: 'gbk' codec can't encode character '\U0001f527' in position 18: illegal multibyte sequence
+Traceback (most recent call last):
+  File "d:\ENVS\active-psych-sampling\tools\repair\extract_pyc_metadata.py", line 83, in extract_from_pyc
+    print(line)
+    ~~~~~^^^^^^
+UnicodeEncodeError: 'gbk' codec can't encode character '\u2705' in position 14: illegal multibyte sequence
+Traceback (most recent call last):
+  File "d:\ENVS\active-psych-sampling\tools\repair\extract_pyc_metadata.py", line 83, in extract_from_pyc
+    print(line)
+    ~~~~~^^^^^^
+UnicodeEncodeError: 'gbk' codec can't encode character '\u2713' in position 14: illegal multibyte sequence
+
+================================================================================
+Analyzing: param_validator.cpython-314.pyc
+================================================================================
+
+=== <module> ===
+Filename: d:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\param_validator.py
+Line: 1
+Arguments: 0
+Local vars: 0
+Names: __doc__, pandas, pd, numpy, np, typing, Dict, List, Any, Tuple, logging, tempfile, pathlib, Path, AEPsychParamValidator, integrate_param_validation, __name__, design_space_path, validator, print, valid_ranges, items, param, values, test_x_dict, validate_and_correct_params, corrected_dict, was_corrected, log_validation_summary
+Constants (28 total):
+  [0] str: '\nAEPsych参数验证和修正模块\n\n解决AEPsych在EUR阶段返回Condition_ID而非实际参数值的问题\nC...'
+  [2] tuple: ('Dict', 'List', 'Any', 'Tuple')
+  [3] tuple: ('Path',)
+  [4] <code object AEPsychParamValidator>
+  [5] str: 'AEPsychParamValidator'
+  [6] <code object __annotate__>
+  [7] <code object integrate_param_validation>
+  [8] str: '__main__'
+  [9] str: 'd:/ENVS/active-psych-sampling/extensions/warmup_budget_check...'
+
+--- Nested functions/classes ---
+  === AEPsychParamValidator ===
+  Filename: d:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\param_validator.py
+  Line: 15
+  Arguments: 0
+  Local vars: 0
+  Names: __name__, __module__, __qualname__, __firstlineno__, __init__, _extract_valid_ranges, validate_and_correct_params, _log_validation_entry, _correct_illegal_value, log_validation_summary, __static_attributes__, __classdictcell__
+  Constants (16 total):
+    [0] str: 'AEPsychParamValidator'
+    [2] <code object __annotate__>
+    [3] <code object __init__>
+    [4] <code object __annotate__>
+    [5] <code object _extract_valid_ranges>
+    [6] <code object __annotate__>
+    [7] <code object validate_and_correct_params>
+    [8] <code object __annotate__>
+    [9] <code object _log_validation_entry>
+
+  --- Nested functions/classes ---
+    === __annotate__ ===
+    Filename: d:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\param_validator.py
+    Line: 16
+    Arguments: 1
+    Local vars: 1
+    Variables: format
+    Names: str
+    Constants (3 total):
+      [0] int: 2
+      [1] str: 'design_space_path'
+      [2] str: 'validation_log_path'
+
+    === __init__ ===
+    Filename: d:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\param_validator.py
+    Line: 16
+    Arguments: 3
+    Local vars: 4
+    Variables: self, design_space_path, validation_log_path, f
+    Names: pd, read_csv, design_space, _extract_valid_ranges, valid_ranges, Path, tempfile, gettempdir, validation_log_path, open, write, logging, info
+    Constants (10 total):
+      [0] str: '\n初始化参数验证器\n\nArgs:\n    design_space_path: 设计空间CSV文件路径\n    vali...'
+      [2] str: 'aepsych_validation.log'
+      [3] str: 'w'
+      [4] str: 'utf-8'
+      [5] tuple: ('encoding',)
+      [6] str: 'AEPsych Parameter Validation Log\n'
+      [7] str: '[Validator] 参数验证日志: '
+      [8] str: '============================================================...'
+      [9] str: '============================================================...'
+
+    === __annotate__ ===
+    Filename: d:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\param_validator.py
+    Line: 43
+    Arguments: 1
+    Local vars: 1
+    Variables: format
+    Names: Dict, str, List, float
+    Constants (2 total):
+      [0] int: 2
+      [1] str: 'return'
+
+    === _extract_valid_ranges ===
+    Filename: d:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\param_validator.py
+    Line: 43
+    Arguments: 1
+    Local vars: 5
+    Variables: self, valid_ranges, col, param_columns, unique_values
+    Names: design_space, columns, startswith, sorted, unique
+    Constants (2 total):
+      [0] str: '提取每个参数的有效取值范围'
+      [1] str: 'x'
+
+    === __annotate__ ===
+    Filename: d:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\param_validator.py
+    Line: 54
+    Arguments: 1
+    Local vars: 1
+    Variables: format
+    Names: Dict, str, List, float, int, Tuple, bool
+    Constants (4 total):
+      [0] int: 2
+      [1] str: 'x_dict'
+      [2] str: 'iteration'
+      [3] str: 'return'
+
+    === validate_and_correct_params ===
+    Filename: d:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\param_validator.py
+    Line: 54
+    Arguments: 3
+    Local vars: 12
+    Variables: self, x_dict, iteration, corrected_dict, was_corrected, param_name, param_values, valid_values, i, value, corrected_value, msg
+    Names: copy, _log_validation_entry, items, valid_ranges, enumerate, _correct_illegal_value, logging, warning, error
+    Constants (16 total):
+      [0] str: '\n验证和修正AEPsych返回的参数\n\nArgs:\n    x_dict: AEPsych返回的参数字典\n    ite...'
+      [1] bool: False
+      [2] str: '\n[VALIDATION CHECK] iter '
+      [3] str: ' - AEPsych返回的原始值:'
+      [4] str: '  '
+      [5] str: ': '
+      [6] bool: True
+      [7] str: '[参数修正 '
+      [8] str: '] '
+      [9] str: ' -> '
+
+    === __annotate__ ===
+    Filename: d:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\param_validator.py
+    Line: 109
+    Arguments: 1
+    Local vars: 1
+    Variables: format
+    Names: str
+    Constants (2 total):
+      [0] int: 2
+      [1] str: 'message'
+
+    === _log_validation_entry ===
+    Filename: d:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\param_validator.py
+    Line: 109
+    Arguments: 2
+    Local vars: 4
+    Variables: self, message, f, e
+    Names: open, validation_log_path, write, Exception, logging, error
+    Constants (7 total):
+      [0] str: '写入validation日志'
+      [1] str: 'a'
+      [2] str: 'utf-8'
+      [3] tuple: ('encoding',)
+      [4] str: '\n'
+      [6] str: '[Validator] 无法写入validation日志: '
+
+    === __annotate__ ===
+    Filename: d:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\param_validator.py
+    Line: 117
+    Arguments: 1
+    Local vars: 1
+    Variables: format
+    Names: str, float, List, int
+    Constants (6 total):
+      [0] int: 2
+      [1] str: 'param_name'
+      [2] str: 'illegal_value'
+      [3] str: 'valid_values'
+      [4] str: 'iteration'
+      [5] str: 'return'
+
+    === _correct_illegal_value ===
+    Filename: d:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\param_validator.py
+    Line: 117
+    Arguments: 5
+    Local vars: 11
+    Variables: self, param_name, illegal_value, valid_values, iteration, row_index, corrected_value, valid_val, distances, closest_index, closest_value
+    Names: int, len, design_space, iloc, logging, info, abs, index, min
+    Constants (12 total):
+      [0] str: '\n修正非法参数值\n\n策略1: Condition_ID映射 - 将非法值作为行索引映射到设计空间\n策略2: 最近邻映射 ...'
+      [1] str: '[Condition_ID修正 '
+      [2] str: '] '
+      [3] str: ': ID '
+      [4] str: ' -> 设计空间第'
+      [5] str: '行 -> '
+      [6] str: '[最近邻修正 '
+      [7] str: ': '
+      [8] str: ' -> '
+      [9] str: ' (距离: '
+
+    === __annotate__ ===
+    Filename: d:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\param_validator.py
+    Line: 163
+    Arguments: 1
+    Local vars: 1
+    Variables: format
+    Names: int, Dict, bool
+    Constants (5 total):
+      [0] int: 2
+      [1] str: 'iteration'
+      [2] str: 'original_dict'
+      [3] str: 'corrected_dict'
+      [4] str: 'was_corrected'
+
+    === log_validation_summary ===
+    Filename: d:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\param_validator.py
+    Line: 163
+    Arguments: 5
+    Local vars: 8
+    Variables: self, iteration, original_dict, corrected_dict, was_corrected, param_name, orig_vals, corr_vals
+    Names: print
+    Constants (8 total):
+      [0] str: '记录验证结果摘要'
+      [1] str: '\n[参数验证 '
+Error processing tests\is_EUR_work\00_plans\251206\scripts\modules\__pycache__\param_validator.cpython-314.pyc: 'gbk' codec can't encode character '\U0001f527' in position 18: illegal multibyte sequence
+
+================================================================================
+Analyzing: sampling_loop.cpython-314.pyc
+================================================================================
+
+=== <module> ===
+Filename: D:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\sampling_loop.py
+Line: 1
+Arguments: 0
+Local vars: 0
+Names: __doc__, os, sys, logging, numpy, np, pandas, pd, torch, scipy.spatial.distance, cdist, typing, Dict, List, Tuple, Any, param_validator, AEPsychParamValidator, PARAM_VALIDATOR_AVAILABLE, ImportError, e, print, run_sampling_loop, _get_diagnostics
+Constants (14 total):
+  [0] str: '\n采样循环和诊断信息获取模块\n负责执行采样循环并收集诊断数据\n'
+  [2] tuple: ('cdist',)
+  [3] tuple: ('Dict', 'List', 'Tuple', 'Any')
+  [4] tuple: ('AEPsychParamValidator',)
+  [5] bool: True
+  [6] str: '[警告] 参数验证器不可用: '
+  [7] bool: False
+  [8] <code object __annotate__>
+  [9] <code object run_sampling_loop>
+
+--- Nested functions/classes ---
+  === __annotate__ ===
+  Filename: D:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\sampling_loop.py
+  Line: 33
+  Arguments: 1
+  Local vars: 1
+  Variables: format
+  Names: int, Dict, str, List, Any
+  Constants (3 total):
+    [0] int: 2
+    [1] str: 'budget'
+    [2] str: 'return'
+
+  === run_sampling_loop ===
+  Filename: D:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\sampling_loop.py
+  Line: 33
+  Arguments: 6
+  Local vars: 78
+  Variables: server, oracle, design_space, budget, logger, result_dir, design_space_path, design_space_df, potential_paths, potential_path, param_validator, debug_dir, validation_log_path, e, BUDGET, DedupDatabaseManager, dedup_db_path, shared_dedup_manager, logs, sampling_history
+  ... and 58 more
+  Names: print, isinstance, str, pd, read_csv, os, path, exists, join, makedirs, getcwd, PARAM_VALIDATOR_AVAILABLE, AEPsychParamValidator, Exception, extensions.custom_generators.models.dedup_manager, DedupDatabaseManager, dirname, initialize, range, len, _strats, generator, type, __name__, hasattr, _base_obj, gen, _original_gen_hooked, transforms, untransform
+  ... and 42 more
+  Constants (144 total):
+    [0] str: '\n执行采样循环\n\nArgs:\n    server: AEPsych Server实例\n    oracle: Orac...'
+    [1] str: '步骤4: 采样循环'
+    [3] str: 'd:/ENVS/active-psych-sampling/extensions/warmup_budget_check...'
+    [4] str: 'design_space_scan.csv'
+    [5] str: 'debug'
+    [6] bool: True
+    [7] tuple: ('exist_ok',)
+    [8] str: 'aepsych_validation.log'
+Error processing tests\is_EUR_work\00_plans\251206\scripts\modules\__pycache__\sampling_loop.cpython-314.pyc: 'gbk' codec can't encode character '\u2705' in position 14: illegal multibyte sequence
+
+================================================================================
+Analyzing: server_manager.cpython-314.pyc
+================================================================================
+
+=== <module> ===
+Filename: D:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\server_manager.py
+Line: 1
+Arguments: 0
+Local vars: 0
+Names: __doc__, json, re, pathlib, Path, typing, Dict, Any, Tuple, aepsych.server, AEPsychServer, initialize_server, verify_server_components
+Constants (9 total):
+  [0] str: '\nAEPsych Server初始化和管理模块\n负责Server创建、配置和验证\n'
+  [2] tuple: ('Path',)
+  [3] tuple: ('Dict', 'Any', 'Tuple')
+  [4] tuple: ('AEPsychServer',)
+  [5] <code object __annotate__>
+  [6] <code object initialize_server>
+  [7] <code object __annotate__>
+  [8] <code object verify_server_components>
+
+--- Nested functions/classes ---
+  === __annotate__ ===
+  Filename: D:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\server_manager.py
+  Line: 15
+  Arguments: 1
+  Local vars: 1
+  Variables: format
+  Names: Path, int, Tuple, AEPsychServer, Dict, str, Any
+  Constants (7 total):
+    [0] int: 2
+    [1] str: 'config_path'
+    [2] str: 'result_dir'
+    [3] str: 'debug_dir'
+    [4] str: 'basegp_keypoints_path'
+    [5] str: 'budget'
+    [6] str: 'return'
+
+  === initialize_server ===
+  Filename: D:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\server_manager.py
+  Line: 15
+  Arguments: 6
+  Local vars: 51
+  Variables: config_path, result_dir, debug_dir, design_space, basegp_keypoints_path, budget, db_path, f, config_str, keypoints_data, encodings_path, encodings, reverse_encodings, col, mapping, k, v, convert_basegp_to_ini, golden_best, golden_worst
+  ... and 31 more
+  Names: print, open, read, shape, json, load, parent, items, join, re, search, DOTALL, sub, max, int, replace, str, os, sys, Path, __file__, resolve, group, strip, exists, chr, write, AEPsychServer, handle_request, name
+  ... and 11 more
+  Constants (100 total):
+    [0] str: '\n初始化AEPsych Server并加载配置\n\nArgs:\n    config_path: 配置文件路径\n    r...'
+    [1] str: '\n'
+    [2] str: '步骤3: 初始化 AEPsych Server'
+    [3] str: 'experiment.db'
+    [4] str: 'r'
+    [5] str: 'utf-8'
+    [6] tuple: ('encoding',)
+Error processing tests\is_EUR_work\00_plans\251206\scripts\modules\__pycache__\server_manager.cpython-314.pyc: 'gbk' codec can't encode character '\u2713' in position 14: illegal multibyte sequence

@@ -1,0 +1,45 @@
+{
+  "x_best_prior_index": 116,
+  "x_best_prior": {
+    "x1_CeilingHeight": 4.0,
+    "x2_GridModule": 6.5,
+    "x3_OuterFurniture": 2.0,
+    "x4_VisualBoundary": 2.0,
+    "x5_PhysicalBoundary": 0.0,
+    "x6_InnerFurniture": 0.0
+  },
+  "best_mean": 1.6336935758590698,
+  "best_std": 0.6781460642814636,
+  "x_worst_prior_index": 322,
+  "x_worst_prior": {
+    "x1_CeilingHeight": 8.5,
+    "x2_GridModule": 8.0,
+    "x3_OuterFurniture": 0.0,
+    "x4_VisualBoundary": 0.0,
+    "x5_PhysicalBoundary": 1.0,
+    "x6_InnerFurniture": 1.0
+  },
+  "worst_mean": -1.3610236644744873,
+  "worst_std": 0.6748030185699463,
+  "x_max_std_index": 281,
+  "x_max_std": {
+    "x1_CeilingHeight": 8.5,
+    "x2_GridModule": 8.0,
+    "x3_OuterFurniture": 2.0,
+    "x4_VisualBoundary": 2.0,
+    "x5_PhysicalBoundary": 1.0,
+    "x6_InnerFurniture": 0.0
+  },
+  "max_std": 0.6881506443023682,
+  "max_std_mean": 0.6580211520195007,
+  "used_center_point": false,
+  "center_point": {
+    "x1_CeilingHeight": 4.0,
+    "x2_GridModule": 7.25,
+    "x3_OuterFurniture": 1.0,
+    "x4_VisualBoundary": 1.0,
+    "x5_PhysicalBoundary": 0.5,
+    "x6_InnerFurniture": 1.0
+  },
+  "ensure_diversity": true
+}

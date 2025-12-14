@@ -1,0 +1,540 @@
+Traceback (most recent call last):
+  File "d:\ENVS\active-psych-sampling\tools\repair\extract_pyc_metadata.py", line 83, in extract_from_pyc
+    print(line)
+    ~~~~~^^^^^^
+UnicodeEncodeError: 'gbk' codec can't encode character '\u2713' in position 14: illegal multibyte sequence
+
+================================================================================
+Analyzing: evaluation.cpython-314.pyc
+================================================================================
+
+=== <module> ===
+Filename: D:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\evaluation.py
+Line: 1
+Arguments: 0
+Local vars: 0
+Names: __doc__, torch, numpy, np, typing, Optional, Dict, Set, List, Tuple, identify_effects_from_model, evaluate_prediction_quality
+Constants (9 total):
+  [0] str: '\n效应识别和预测质量评估模块\n'
+  [2] tuple: ('Optional', 'Dict', 'Set', 'List', 'Tuple')
+  [3] <code object __annotate__>
+  [4] <code object identify_effects_from_model>
+  [5] <code object __annotate__>
+  [6] <code object evaluate_prediction_quality>
+  [7] tuple: (None, 75, None)
+  [8] tuple: (1000,)
+
+--- Nested functions/classes ---
+  === __annotate__ ===
+  Filename: D:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\evaluation.py
+  Line: 12
+  Arguments: 1
+  Local vars: 1
+  Variables: format
+  Names: Optional, List, Tuple, int, Dict
+  Constants (5 total):
+    [0] int: 2
+    [1] str: 'configured_pairs'
+    [2] str: 'threshold_percentile'
+    [3] str: 'oracle_spec'
+    [4] str: 'return'
+
+  === identify_effects_from_model ===
+  Filename: D:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\evaluation.py
+  Line: 12
+  Arguments: 6
+  Local vars: 51
+  Variables: server, oracle, ordinal_helper_class, configured_pairs, threshold_percentile, oracle_spec, strat, weights, i, w, true_main, interaction_terms, true_pair, term_name, weight, parts, j, configured_set, pairs_to_evaluate, grid_size
+  ... and 31 more
+  Names: _strats, model, hasattr, get_model_spec, AttributeError, get, enumerate, abs, set, items, replace, split, len, int, add, min, max, print, sorted, ValueError, range, torch, rand, float64, no_grad, clone, append, np, mean, std
+  ... and 4 more
+  Constants (57 total):
+    [0] str: '\n从训练好的模型识别显著效应 (ANOVA事后分析)\n\nArgs:\n    server: AEPsych server...'
+    [2] str: 'get_model_spec'
+    [3] str: 'oracle对象没有get_model_spec()方法，请传入oracle_spec参数'
+    [4] str: 'weights'
+    [5] float: 0.1
+    [6] str: 'interaction_terms'
+    [7] str: 'x'
+    [8] str: ''
+    [9] str: 'interaction_'
+
+  --- Nested functions/classes ---
+    === <genexpr> ===
+    Filename: D:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\evaluation.py
+    Line: 68
+    Arguments: 1
+    Local vars: 2
+    Variables: .0, p
+    Names: tuple
+    Constants (1 total):
+
+    === __annotate__ ===
+    Filename: D:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\evaluation.py
+    Line: 92
+    Arguments: 1
+    Local vars: 1
+    Variables: format
+    Names: torch, Tensor, float
+    Constants (3 total):
+      [0] int: 2
+      [1] str: 'grid_'
+      [2] str: 'return'
+
+    === compute_metric ===
+    Filename: D:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\evaluation.py
+    Line: 92
+    Arguments: 1
+    Local vars: 1
+    Variables: grid_
+    Names: torch, no_grad, is_ordinal, compute_entropy, mean, item, posterior, variance
+    Constants (2 total):
+      [0] str: 'Compute information metric (auto-select entropy/variance)'
+
+    === <lambda> ===
+    Filename: D:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\evaluation.py
+    Line: 147
+    Arguments: 1
+    Local vars: 1
+    Variables: x
+    Names: float
+    Constants (1 total):
+      [0] int: 1
+
+    === <lambda> ===
+    Filename: D:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\evaluation.py
+    Line: 150
+    Arguments: 1
+    Local vars: 1
+    Variables: x
+    Names: float
+    Constants (1 total):
+      [0] int: 1
+
+  === __annotate__ ===
+  Filename: D:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\evaluation.py
+  Line: 189
+  Arguments: 1
+  Local vars: 1
+  Variables: format
+  Names: np, ndarray, int, Dict
+  Constants (4 total):
+    [0] int: 2
+    [1] str: 'design_space'
+    [2] str: 'n_test'
+    [3] str: 'return'
+
+  === evaluate_prediction_quality ===
+  Filename: D:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\evaluation.py
+  Line: 189
+  Arguments: 4
+  Local vars: 28
+  Variables: server, oracle, design_space, n_test, strat, model, rng_test, test_indices, X_test, x, y_likert_list, y_likert, y_true, is_ordinal, cutpoints, probs, y_pred, posterior, SS_res, SS_tot
+  ... and 8 more
+  Names: _strats, model, np, random, RandomState, choice, len, torch, from_numpy, to, float64, numpy, array, hasattr, likelihood, no_grad, print, cutpoints, detach, cpu, predict_probs, argmax, posterior, mean, squeeze, clip, min, max, dict, zip
+  ... and 11 more
+  Constants (46 total):
+    [0] str: '\n在测试集上评估预测精度\n\nArgs:\n    server: AEPsych server\n    oracle: S...'
+    [1] bool: True
+    [2] tuple: ('size', 'replace')
+    [3] str: 'cutpoints'
+    [4] str: '\n[DEBUG 预测质量评估]'
+    [5] str: '  模型类型: '
+    [6] str: 'Ordinal'
+    [7] str: 'Regression'
+    [8] str: '  模型cutpoints = '
+    [9] tuple: ('dim',)
+
+
+================================================================================
+Disassembly of <module> (first 100 instructions):
+================================================================================
+
+  0           RESUME                   0
+
+  3           LOAD_CONST               0 ('\n效应识别和预测质量评估模块\n')
+              STORE_NAME               0 (__doc__)
+
+  7           LOAD_SMALL_INT           0
+              LOAD_CONST               1 (None)
+              IMPORT_NAME              1 (torch)
+              STORE_NAME               1 (torch)
+
+  8           LOAD_SMALL_INT           0
+              LOAD_CONST               1 (None)
+              IMPORT_NAME              2 (numpy)
+              STORE_NAME               3 (np)
+
+  9           LOAD_SMALL_INT           0
+              LOAD_CONST               2 (('Optional', 'Dict', 'Set', 'List', 'Tuple'))
+              IMPORT_NAME              4 (typing)
+              IMPORT_FROM              5 (Optional)
+              STORE_NAME               5 (Optional)
+              IMPORT_FROM              6 (Dict)
+              STORE_NAME               6 (Dict)
+              IMPORT_FROM              7 (Set)
+              STORE_NAME               7 (Set)
+              IMPORT_FROM              8 (List)
+              STORE_NAME               8 (List)
+              IMPORT_FROM              9 (Tuple)
+              STORE_NAME               9 (Tuple)
+              POP_TOP
+
+ 12           LOAD_CONST               7 ((None, 75, None))
+              LOAD_CONST               3 (<code object __annotate__ at 0x000001D195397AB0, file "D:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\evaluation.py", line 12>)
+              MAKE_FUNCTION
+              LOAD_CONST               4 (<code object identify_effects_from_model at 0x000001D1954C17D0, file "D:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\evaluation.py", line 12>)
+              MAKE_FUNCTION
+              SET_FUNCTION_ATTRIBUTE  16 (annotate)
+              SET_FUNCTION_ATTRIBUTE   1 (defaults)
+              STORE_NAME              10 (identify_effects_from_model)
+
+189           LOAD_CONST               8 ((1000,))
+              LOAD_CONST               5 (<code object __annotate__ at 0x000001D195587870, file "D:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\evaluation.py", line 189>)
+              MAKE_FUNCTION
+              LOAD_CONST               6 (<code object evaluate_prediction_quality at 0x000001D1954BCB20, file "D:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\evaluation.py", line 189>)
+              MAKE_FUNCTION
+              SET_FUNCTION_ATTRIBUTE  16 (annotate)
+              SET_FUNCTION_ATTRIBUTE   1 (defaults)
+              STORE_NAME              11 (evaluate_prediction_quality)
+              LOAD_CONST               1 (None)
+              RETURN_VALUE
+
+Disassembly of <code object __annotate__ at 0x000001D195397AB0, file "D:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\evaluation.py", line 12>:
+ 12           RESUME                   0
+              LOAD_FAST_BORROW         0 (format)
+              LOAD_SMALL_INT           2
+              COMPARE_OP             132 (>)
+              POP_JUMP_IF_FALSE        3 (to L1)
+              NOT_TAKEN
+              LOAD_COMMON_CONSTANT     1 (NotImplementedError)
+              RAISE_VARARGS            1
+      L1:     LOAD_CONST               1 ('configured_pairs')
+
+ 16           LOAD_GLOBAL              0 (Optional)
+              LOAD_GLOBAL              2 (List)
+              LOAD_GLOBAL              4 (Tuple)
+              LOAD_GLOBAL              6 (int)
+              LOAD_GLOBAL              6 (int)
+              BUILD_TUPLE              2
+              BINARY_OP               26 ([])
+              BINARY_OP               26 ([])
+              BINARY_OP               26 ([])
+
+ 12           LOAD_CONST               2 ('threshold_percentile')
+
+ 17           LOAD_GLOBAL              6 (int)
+
+ 12           LOAD_CONST               3 ('oracle_spec')
+
+ 18           LOAD_GLOBAL              0 (Optional)
+              LOAD_GLOBAL              8 (Dict)
+              BINARY_OP               26 ([])
+
+ 12           LOAD_CONST               4 ('return')
+
+ 19           LOAD_GLOBAL              8 (Dict)
+
+ 12           BUILD_MAP                4
+              RETURN_VALUE
+
+Disassembly of <code object identify_effects_from_model at 0x000001D1954C17D0, file "D:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\evaluation.py", line 12>:
+  --            MAKE_CELL               51 (model)
+                MAKE_CELL               52 (ordinal_helper)
+
+  12            RESUME                   0
+
+  34            NOP
+
+  35    L1:     LOAD_FAST_BORROW         0 (server)
+                LOAD_ATTR                0 (_strats)
+                LOAD_SMALL_INT           0
+                BINARY_OP               26 ([])
+
+... and 1934 more lines of bytecode
+
+================================================================================
+Analyzing: evaluation_v2.cpython-314.pyc
+================================================================================
+
+=== <module> ===
+Filename: d:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\evaluation_v2.py
+Line: 1
+Arguments: 0
+Local vars: 0
+Names: __doc__, torch, numpy, np, scipy.stats, spearmanr, pearsonr, sklearn.linear_model, LinearRegression, typing, Optional, Dict, List, Tuple, warnings, filterwarnings, evaluate_effect_recovery_v2, evaluate_effect_recovery_from_samples
+Constants (12 total):
+  [0] str: '\n改进的效应识别和预测质量评估 (v2)\n\n核心改进：\n1. 直接用线性回归系数作为effect估计，而不是方差\n2. ...'
+  [2] tuple: ('spearmanr', 'pearsonr')
+  [3] tuple: ('LinearRegression',)
+  [4] tuple: ('Optional', 'Dict', 'List', 'Tuple')
+  [5] str: 'ignore'
+  [6] <code object __annotate__>
+  [7] <code object evaluate_effect_recovery_v2>
+  [8] <code object __annotate__>
+  [9] <code object evaluate_effect_recovery_from_samples>
+
+--- Nested functions/classes ---
+  === __annotate__ ===
+  Filename: d:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\evaluation_v2.py
+  Line: 23
+  Arguments: 1
+  Local vars: 1
+  Variables: format
+  Names: np, ndarray, Dict, str, List, Optional, Tuple, int, float
+  Constants (8 total):
+    [0] int: 2
+    [1] str: 'design_space'
+    [2] str: 'logs'
+    [3] str: 'configured_pairs'
+    [4] str: 'n_grid'
+    [5] str: 'test_fraction'
+    [6] str: 'oracle_spec'
+    [7] str: 'return'
+
+  === evaluate_effect_recovery_v2 ===
+  Filename: d:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\evaluation_v2.py
+  Line: 23
+  Arguments: 8
+  Local vars: 66
+  Variables: server, oracle, design_space, logs, configured_pairs, n_grid, test_fraction, oracle_spec, strat, model, oracle_weights, oracle_interactions, int_terms, term_name, weight, parts, i, j, pairs_to_eval, train_y_raw
+  ... and 46 more
+  Names: _strats, model, hasattr, get_model_spec, AttributeError, np, array, get, items, replace, split, len, int, min, max, ValueError, IndexError, sorted, list, keys, print, shape, type, range, column_stack, ones, likelihood, torch, no_grad, predict_probs
+  ... and 35 more
+  Constants (101 total):
+    [0] str: '\n通过线性回归系数与Oracle权重对标，评估采样策略的效应识别能力\n\n核心思路：\n1. 从model的训练数据中拟合线...'
+    [2] str: 'get_model_spec'
+    [3] str: 'oracle对象没有get_model_spec()方法，请传入oracle_spec参数'
+    [4] str: 'weights'
+    [5] str: 'interaction_terms'
+    [6] str: 'interaction_'
+    [7] str: ''
+    [8] str: 'x'
+    [9] str: '*'
+
+  --- Nested functions/classes ---
+    === <genexpr> ===
+    Filename: d:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\evaluation_v2.py
+    Line: 115
+    Arguments: 1
+    Local vars: 3
+    Variables: .0, i, j
+    Constants (2 total):
+      [0] slice: slice(None, None, None)
+
+  === __annotate__ ===
+  Filename: d:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\evaluation_v2.py
+  Line: 316
+  Arguments: 1
+  Local vars: 1
+  Variables: format
+  Names: np, ndarray, Optional, List, Tuple, int, Dict
+  Constants (7 total):
+    [0] int: 2
+    [1] str: 'X_train'
+    [2] str: 'y_train'
+    [3] str: 'design_space'
+    [4] str: 'configured_pairs'
+    [5] str: 'oracle_spec'
+    [6] str: 'return'
+
+  === evaluate_effect_recovery_from_samples ===
+  Filename: d:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\evaluation_v2.py
+  Line: 316
+  Arguments: 6
+  Local vars: 50
+  Variables: X_train, y_train, oracle, design_space, configured_pairs, oracle_spec, oracle_weights, oracle_interactions, int_terms, term_name, weight, cleaned, parts, i, j, configured_set, oracle_set, pairs_to_eval, feature_cols, X_design
+  ... and 30 more
+  Names: hasattr, get_model_spec, AttributeError, np, array, get, items, replace, split, len, int, min, max, ValueError, IndexError, set, keys, print, sorted, range, column_stack, ones, LinearRegression, fit, intercept_, coef_, score, zip, spearmanr, pearsonr
+  ... and 13 more
+  Constants (75 total):
+    [0] str: '\n直接从采样数据（X, y）评估effect恢复能力，不需要model实例\n\nArgs:\n    X_train: 采样...'
+    [2] str: 'get_model_spec'
+    [3] str: 'oracle对象没有get_model_spec()方法，请传入oracle_spec参数'
+    [4] str: 'weights'
+    [5] str: 'interaction_terms'
+    [6] str: 'interaction_'
+    [7] str: ''
+    [8] str: 'x'
+    [9] str: '*'
+
+  --- Nested functions/classes ---
+    === <genexpr> ===
+    Filename: d:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\evaluation_v2.py
+    Line: 369
+    Arguments: 1
+    Local vars: 2
+    Variables: .0, p
+    Names: tuple, sorted
+    Constants (1 total):
+
+    === <genexpr> ===
+    Filename: d:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\evaluation_v2.py
+    Line: 397
+    Arguments: 1
+    Local vars: 3
+    Variables: .0, i, j
+    Constants (2 total):
+      [0] slice: slice(None, None, None)
+
+
+================================================================================
+Disassembly of <module> (first 100 instructions):
+================================================================================
+
+  0           RESUME                   0
+
+  3           LOAD_CONST               0 ('\n改进的效应识别和预测质量评估 (v2)\n\n核心改进：\n1. 直接用线性回归系数作为effect估计，而不是方差\n2. 计算与Oracle权重的Spearman相关性，量化采样质量\n3. 支持序数和回归两种模型类型\n4. 精确ANOVA分解（在边际期望下）\n')
+              STORE_NAME               0 (__doc__)
+
+ 13           LOAD_SMALL_INT           0
+              LOAD_CONST               1 (None)
+              IMPORT_NAME              1 (torch)
+              STORE_NAME               1 (torch)
+
+ 14           LOAD_SMALL_INT           0
+              LOAD_CONST               1 (None)
+              IMPORT_NAME              2 (numpy)
+              STORE_NAME               3 (np)
+
+ 15           LOAD_SMALL_INT           0
+              LOAD_CONST               2 (('spearmanr', 'pearsonr'))
+              IMPORT_NAME              4 (scipy.stats)
+              IMPORT_FROM              5 (spearmanr)
+              STORE_NAME               5 (spearmanr)
+              IMPORT_FROM              6 (pearsonr)
+              STORE_NAME               6 (pearsonr)
+              POP_TOP
+
+ 16           LOAD_SMALL_INT           0
+              LOAD_CONST               3 (('LinearRegression',))
+              IMPORT_NAME              7 (sklearn.linear_model)
+              IMPORT_FROM              8 (LinearRegression)
+              STORE_NAME               8 (LinearRegression)
+              POP_TOP
+
+ 17           LOAD_SMALL_INT           0
+              LOAD_CONST               4 (('Optional', 'Dict', 'List', 'Tuple'))
+              IMPORT_NAME              9 (typing)
+              IMPORT_FROM             10 (Optional)
+              STORE_NAME              10 (Optional)
+              IMPORT_FROM             11 (Dict)
+              STORE_NAME              11 (Dict)
+              IMPORT_FROM             12 (List)
+              STORE_NAME              12 (List)
+              IMPORT_FROM             13 (Tuple)
+              STORE_NAME              13 (Tuple)
+              POP_TOP
+
+ 18           LOAD_SMALL_INT           0
+              LOAD_CONST               1 (None)
+              IMPORT_NAME             14 (warnings)
+              STORE_NAME              14 (warnings)
+
+ 20           LOAD_NAME               14 (warnings)
+              LOAD_ATTR               30 (filterwarnings)
+              PUSH_NULL
+              LOAD_CONST               5 ('ignore')
+              CALL                     1
+              POP_TOP
+
+ 23           LOAD_CONST              10 ((None, 500, 0.3, None))
+              LOAD_CONST               6 (<code object __annotate__ at 0x000001D1959D8030, file "d:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\evaluation_v2.py", line 23>)
+              MAKE_FUNCTION
+              LOAD_CONST               7 (<code object evaluate_effect_recovery_v2 at 0x000001D195786C70, file "d:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\evaluation_v2.py", line 23>)
+              MAKE_FUNCTION
+              SET_FUNCTION_ATTRIBUTE  16 (annotate)
+              SET_FUNCTION_ATTRIBUTE   1 (defaults)
+              STORE_NAME              16 (evaluate_effect_recovery_v2)
+
+316           LOAD_CONST              11 ((None, None))
+              LOAD_CONST               8 (<code object __annotate__ at 0x000001D19532ED80, file "d:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\evaluation_v2.py", line 316>)
+              MAKE_FUNCTION
+              LOAD_CONST               9 (<code object evaluate_effect_recovery_from_samples at 0x000001D195789110, file "d:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\evaluation_v2.py", line 316>)
+              MAKE_FUNCTION
+              SET_FUNCTION_ATTRIBUTE  16 (annotate)
+              SET_FUNCTION_ATTRIBUTE   1 (defaults)
+              STORE_NAME              17 (evaluate_effect_recovery_from_samples)
+              LOAD_CONST               1 (None)
+              RETURN_VALUE
+
+Disassembly of <code object __annotate__ at 0x000001D1959D8030, file "d:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\evaluation_v2.py", line 23>:
+ 23           RESUME                   0
+              LOAD_FAST_BORROW         0 (format)
+              LOAD_SMALL_INT           2
+              COMPARE_OP             132 (>)
+              POP_JUMP_IF_FALSE        3 (to L1)
+              NOT_TAKEN
+              LOAD_COMMON_CONSTANT     1 (NotImplementedError)
+              RAISE_VARARGS            1
+      L1:     LOAD_CONST               1 ('design_space')
+
+ 26           LOAD_GLOBAL              0 (np)
+              LOAD_ATTR                2 (ndarray)
+
+ 23           LOAD_CONST               2 ('logs')
+
+ 27           LOAD_GLOBAL              4 (Dict)
+              LOAD_GLOBAL              6 (str)
+              LOAD_GLOBAL              8 (List)
+              BUILD_TUPLE              2
+              BINARY_OP               26 ([])
+
+ 23           LOAD_CONST               3 ('configured_pairs')
+
+
+... and 2853 more lines of bytecode
+
+================================================================================
+Analyzing: oracle.cpython-314.pyc
+================================================================================
+
+=== <module> ===
+Filename: D:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\oracle.py
+Line: 1
+Arguments: 0
+Local vars: 0
+Names: __doc__, json, numpy, np, pathlib, Path, typing, Optional, Dict, Any, create_oracle, print_oracle_spec, save_oracle_spec
+Constants (12 total):
+  [0] str: '\nOracle模型创建和管理模块\n负责创建模拟被试的Oracle模型\n'
+  [2] tuple: ('Path',)
+  [3] tuple: ('Optional', 'Dict', 'Any')
+  [4] <code object __annotate__>
+  [5] <code object create_oracle>
+  [6] <code object __annotate__>
+  [7] <code object print_oracle_spec>
+  [8] <code object __annotate__>
+  [9] <code object save_oracle_spec>
+
+--- Nested functions/classes ---
+  === __annotate__ ===
+  Filename: D:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\oracle.py
+  Line: 14
+  Arguments: 1
+  Local vars: 1
+  Variables: format
+  Names: int, float, list, Optional
+  Constants (10 total):
+    [0] int: 2
+    [1] str: 'seed'
+    [2] str: 'bias'
+    [3] str: 'weight_std'
+    [4] str: 'noise_std'
+    [5] str: 'interaction_pairs'
+    [6] str: 'interaction_scale'
+    [7] str: 'likert_levels'
+    [8] str: 'likert_sensitivity'
+    [9] str: 'strategy_seed'
+
+  === create_oracle ===
+  Filename: D:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\oracle.py
+  Line: 14
+  Arguments: 10
+  Local vars: 11
+  Variables: oracle_class, seed, bias, weight_std, noise_std, interaction_pairs, interaction_scale, likert_levels, likert_sensitivity, strategy_seed, oracle
+  Names: print, np, random, seed, type, __name__
+  Constants (5 total):
+    [0] str: '\n创建Oracle模型实例\n\nArgs:\n    oracle_class: Oracle类（如SingleSubjec...'
+    [1] str: '策略种子: '
+    [2] tuple: ('seed', 'bias', 'weight_std', 'noise_std', 'interaction_pai
+Error processing tests\is_EUR_work\00_plans\251206\scripts\modules\__pycache__\oracle.cpython-314.pyc: 'gbk' codec can't encode character '\u2713' in position 14: illegal multibyte sequence

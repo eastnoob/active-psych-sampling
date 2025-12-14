@@ -1,0 +1,382 @@
+Traceback (most recent call last):
+  File "d:\ENVS\active-psych-sampling\tools\repair\extract_pyc_metadata.py", line 83, in extract_from_pyc
+    print(line)
+    ~~~~~^^^^^^
+UnicodeEncodeError: 'gbk' codec can't encode character '\u2713' in position 14: illegal multibyte sequence
+
+================================================================================
+Analyzing: __init__.cpython-314.pyc
+================================================================================
+
+=== <module> ===
+Filename: D:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\__init__.py
+Line: 1
+Arguments: 0
+Local vars: 0
+Names: __doc__, design_space, load_design_space, transform_to_numeric, generate_fallback_design_space, oracle, create_oracle, print_oracle_spec, save_oracle_spec, evaluation, identify_effects_from_model, evaluate_prediction_quality, server_manager, initialize_server, verify_server_components, sampling_loop, run_sampling_loop, data_saver, save_sampling_data, update_summary_with_results, __all__
+Constants (9 total):
+  [0] str: '\nEUR实验模块包\n'
+  [1] tuple: ('load_design_space', 'transform_to_numeric', 'generate_fall
+  [2] tuple: ('create_oracle', 'print_oracle_spec', 'save_oracle_spec')
+  [3] tuple: ('identify_effects_from_model', 'evaluate_prediction_quality
+  [4] tuple: ('initialize_server', 'verify_server_components')
+  [5] tuple: ('run_sampling_loop',)
+  [6] tuple: ('save_sampling_data', 'update_summary_with_results')
+  [8] tuple: ('load_design_space', 'transform_to_numeric', 'generate_fall
+
+
+================================================================================
+Disassembly of <module> (first 100 instructions):
+================================================================================
+
+  0           RESUME                   0
+
+  3           LOAD_CONST               0 ('\nEUR实验模块包\n')
+              STORE_NAME               0 (__doc__)
+
+  7           LOAD_SMALL_INT           1
+              LOAD_CONST               1 (('load_design_space', 'transform_to_numeric', 'generate_fallback_design_space'))
+              IMPORT_NAME              1 (design_space)
+              IMPORT_FROM              2 (load_design_space)
+              STORE_NAME               2 (load_design_space)
+              IMPORT_FROM              3 (transform_to_numeric)
+              STORE_NAME               3 (transform_to_numeric)
+              IMPORT_FROM              4 (generate_fallback_design_space)
+              STORE_NAME               4 (generate_fallback_design_space)
+              POP_TOP
+
+ 12           LOAD_SMALL_INT           1
+              LOAD_CONST               2 (('create_oracle', 'print_oracle_spec', 'save_oracle_spec'))
+              IMPORT_NAME              5 (oracle)
+              IMPORT_FROM              6 (create_oracle)
+              STORE_NAME               6 (create_oracle)
+              IMPORT_FROM              7 (print_oracle_spec)
+              STORE_NAME               7 (print_oracle_spec)
+              IMPORT_FROM              8 (save_oracle_spec)
+              STORE_NAME               8 (save_oracle_spec)
+              POP_TOP
+
+ 13           LOAD_SMALL_INT           1
+              LOAD_CONST               3 (('identify_effects_from_model', 'evaluate_prediction_quality'))
+              IMPORT_NAME              9 (evaluation)
+              IMPORT_FROM             10 (identify_effects_from_model)
+              STORE_NAME              10 (identify_effects_from_model)
+              IMPORT_FROM             11 (evaluate_prediction_quality)
+              STORE_NAME              11 (evaluate_prediction_quality)
+              POP_TOP
+
+ 14           LOAD_SMALL_INT           1
+              LOAD_CONST               4 (('initialize_server', 'verify_server_components'))
+              IMPORT_NAME             12 (server_manager)
+              IMPORT_FROM             13 (initialize_server)
+              STORE_NAME              13 (initialize_server)
+              IMPORT_FROM             14 (verify_server_components)
+              STORE_NAME              14 (verify_server_components)
+              POP_TOP
+
+ 15           LOAD_SMALL_INT           1
+              LOAD_CONST               5 (('run_sampling_loop',))
+              IMPORT_NAME             15 (sampling_loop)
+              IMPORT_FROM             16 (run_sampling_loop)
+              STORE_NAME              16 (run_sampling_loop)
+              POP_TOP
+
+ 16           LOAD_SMALL_INT           1
+              LOAD_CONST               6 (('save_sampling_data', 'update_summary_with_results'))
+              IMPORT_NAME             17 (data_saver)
+              IMPORT_FROM             18 (save_sampling_data)
+              STORE_NAME              18 (save_sampling_data)
+              IMPORT_FROM             19 (update_summary_with_results)
+              STORE_NAME              19 (update_summary_with_results)
+              POP_TOP
+
+ 18           BUILD_LIST               0
+              LOAD_CONST               8 (('load_design_space', 'transform_to_numeric', 'generate_fallback_design_space', 'create_oracle', 'print_oracle_spec', 'save_oracle_spec', 'identify_effects_from_model', 'evaluate_prediction_quality', 'initialize_server', 'verify_server_components', 'run_sampling_loop', 'save_sampling_data', 'update_summary_with_results'))
+              LIST_EXTEND              1
+              STORE_NAME              20 (__all__)
+              LOAD_CONST               7 (None)
+              RETURN_VALUE
+
+
+================================================================================
+Analyzing: data_saver.cpython-314.pyc
+================================================================================
+
+=== <module> ===
+Filename: D:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\data_saver.py
+Line: 1
+Arguments: 0
+Local vars: 0
+Names: __doc__, json, numpy, np, pandas, pd, pathlib, Path, typing, Dict, List, Any, _compute_enhanced_statistics, save_sampling_data, update_summary_with_results
+Constants (11 total):
+  [0] str: '\n数据保存和报告生成模块\n负责保存采样数据和实验总结\n'
+  [2] tuple: ('Path',)
+  [3] tuple: ('Dict', 'List', 'Any')
+  [4] <code object __annotate__>
+  [5] <code object _compute_enhanced_statistics>
+  [6] <code object __annotate__>
+  [7] <code object save_sampling_data>
+  [8] <code object __annotate__>
+  [9] <code object update_summary_with_results>
+
+--- Nested functions/classes ---
+  === __annotate__ ===
+  Filename: D:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\data_saver.py
+  Line: 15
+  Arguments: 1
+  Local vars: 1
+  Variables: format
+  Names: Dict, str, List, Any
+  Constants (3 total):
+    [0] int: 2
+    [1] str: 'logs'
+    [2] str: 'return'
+
+  === _compute_enhanced_statistics ===
+  Filename: D:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\data_saver.py
+  Line: 15
+  Arguments: 1
+  Local vars: 8
+  Variables: logs, stats, v, r_t_values, lambda_values, gamma_values, min_dist_values, unique_samples
+  Names: np, array, pd, isna, len, float, min, max, mean, var, nan, set, int
+  Constants (22 total):
+    [0] str: '\n计算增强的监控统计指标（P0）\n\nArgs:\n    logs: 采样日志字典\n\nReturns:\n    stats...'
+    [1] str: 'r_t'
+    [2] str: 'min'
+    [3] str: 'max'
+    [4] str: 'mean'
+    [5] str: 'initial'
+    [6] str: 'final'
+    [7] str: 'variance'
+    [8] str: 'r_t_statistics'
+    [9] float: 0.0
+
+  --- Nested functions/classes ---
+    === <genexpr> ===
+    Filename: D:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\data_saver.py
+    Line: 92
+    Arguments: 1
+    Local vars: 2
+    Variables: .0, x
+    Names: tuple, tolist
+    Constants (1 total):
+
+  === __annotate__ ===
+  Filename: D:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\data_saver.py
+  Line: 110
+  Arguments: 1
+  Local vars: 1
+  Variables: format
+  Names: Dict, str, List, Any, Path
+  Constants (5 total):
+    [0] int: 2
+    [1] str: 'logs'
+    [2] str: 'data_dir'
+    [3] str: 'summary'
+    [4] str: 'return'
+
+  === save_sampling_data ===
+  Filename: D:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\data_saver.py
+  Line: 110
+  Arguments: 3
+  Local vars: 18
+  Variables: logs, data_dir, summary, saved_files, phase_labels, df, i, x, test_data_file, sampling_history_array, history_file, enhanced_stats, y_array, summary_file, f, interaction_log, iteration, interaction_log_file
+  Names: print, len, pd, DataFrame, range, to_csv, np, array, float32, save, _compute_enhanced_statistics, int, min, max, float, mean, std, update, open, json, dump, enumerate, tolist, isna
+  Constants (48 total):
+    [0] str: '\n保存采样数据为CSV和JSON文件\n\nArgs:\n    logs: 采样日志字典\n    data_dir: 数据目...'
+    [1] str: '步骤5: 保存数据文件'
+    [2] str: 'golden_warmup'
+    [3] str: 'eur_optimization'
+    [4] str: 'iteration'
+    [5] str: 'phase'
+    [6] str: 'y_value'
+    [7] str: 'y_values'
+    [8] str: 'lambda_t'
+    [9] str: 'gamma_t'
+
+  === __annotate__ ===
+  Filename: D:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\data_saver.py
+  Line: 212
+  Arguments: 1
+  Local vars: 1
+  Variables: format
+  Names: Dict, str, Any, Path
+  Constants (8 total):
+    [0] int: 2
+    [1] str: 'summary'
+    [2] str: 'effect_results'
+    [3] str: 'pred_results'
+    [4] str: 'summary_file'
+    [5] str: 'effect_recovery_v2'
+    [6] str: 'return'
+
+  === update_summary_with_results ===
+  Filename: D:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\data_saver.py
+  Line: 212
+  Arguments: 5
+  Local vars: 7
+  Variables: summary, effect_results, pred_results, summary_file, effect_recovery_v2, p, f
+  Names: get, sorted, list, set, open, json, dump, print
+  Constants (19 total):
+    [0] str: '\n更新摘要文件，添加效应识别和预测质量结果\n\nArgs:\n    summary: 原始摘要字典\n    effect_...'
+    [1] str: 'main_accuracy'
+    [2] float: 0.0
+    [3] str: 'pair_accuracy'
+    [4] str: 'identified_main'
+    [5] str: 'identified_pair'
+    [6] str: 'true_main'
+    [7] str: 'true_pair'
+    [8] str: 'effect_identification'
+    [9] str: 'prediction_quality'
+
+
+================================================================================
+Disassembly of <module> (first 100 instructions):
+================================================================================
+
+  0           RESUME                   0
+
+  3           LOAD_CONST               0 ('\n数据保存和报告生成模块\n负责保存采样数据和实验总结\n')
+              STORE_NAME               0 (__doc__)
+
+  8           LOAD_SMALL_INT           0
+              LOAD_CONST               1 (None)
+              IMPORT_NAME              1 (json)
+              STORE_NAME               1 (json)
+
+  9           LOAD_SMALL_INT           0
+              LOAD_CONST               1 (None)
+              IMPORT_NAME              2 (numpy)
+              STORE_NAME               3 (np)
+
+ 10           LOAD_SMALL_INT           0
+              LOAD_CONST               1 (None)
+              IMPORT_NAME              4 (pandas)
+              STORE_NAME               5 (pd)
+
+ 11           LOAD_SMALL_INT           0
+              LOAD_CONST               2 (('Path',))
+              IMPORT_NAME              6 (pathlib)
+              IMPORT_FROM              7 (Path)
+              STORE_NAME               7 (Path)
+              POP_TOP
+
+ 12           LOAD_SMALL_INT           0
+              LOAD_CONST               3 (('Dict', 'List', 'Any'))
+              IMPORT_NAME              8 (typing)
+              IMPORT_FROM              9 (Dict)
+              STORE_NAME               9 (Dict)
+              IMPORT_FROM             10 (List)
+              STORE_NAME              10 (List)
+              IMPORT_FROM             11 (Any)
+              STORE_NAME              11 (Any)
+              POP_TOP
+
+ 15           LOAD_CONST               4 (<code object __annotate__ at 0x00000249AB443730, file "D:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\data_saver.py", line 15>)
+              MAKE_FUNCTION
+              LOAD_CONST               5 (<code object _compute_enhanced_statistics at 0x00000249AB5E45D0, file "D:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\data_saver.py", line 15>)
+              MAKE_FUNCTION
+              SET_FUNCTION_ATTRIBUTE  16 (annotate)
+              STORE_NAME              12 (_compute_enhanced_statistics)
+
+110           LOAD_CONST              10 ((None,))
+              LOAD_CONST               6 (<code object __annotate__ at 0x00000249AB43F910, file "D:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\data_saver.py", line 110>)
+              MAKE_FUNCTION
+              LOAD_CONST               7 (<code object save_sampling_data at 0x00000249AB5E58A0, file "D:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\data_saver.py", line 110>)
+              MAKE_FUNCTION
+              SET_FUNCTION_ATTRIBUTE  16 (annotate)
+              SET_FUNCTION_ATTRIBUTE   1 (defaults)
+              STORE_NAME              13 (save_sampling_data)
+
+212           LOAD_CONST              10 ((None,))
+              LOAD_CONST               8 (<code object __annotate__ at 0x00000249ABA84DB0, file "D:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\data_saver.py", line 212>)
+              MAKE_FUNCTION
+              LOAD_CONST               9 (<code object update_summary_with_results at 0x00000249AB8BC4C0, file "D:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\data_saver.py", line 212>)
+              MAKE_FUNCTION
+              SET_FUNCTION_ATTRIBUTE  16 (annotate)
+              SET_FUNCTION_ATTRIBUTE   1 (defaults)
+              STORE_NAME              14 (update_summary_with_results)
+              LOAD_CONST               1 (None)
+              RETURN_VALUE
+
+Disassembly of <code object __annotate__ at 0x00000249AB443730, file "D:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\data_saver.py", line 15>:
+ 15           RESUME                   0
+              LOAD_FAST_BORROW         0 (format)
+              LOAD_SMALL_INT           2
+              COMPARE_OP             132 (>)
+              POP_JUMP_IF_FALSE        3 (to L1)
+              NOT_TAKEN
+              LOAD_COMMON_CONSTANT     1 (NotImplementedError)
+              RAISE_VARARGS            1
+      L1:     LOAD_CONST               1 ('logs')
+              LOAD_GLOBAL              0 (Dict)
+              LOAD_GLOBAL              2 (str)
+              LOAD_GLOBAL              4 (List)
+              LOAD_GLOBAL              6 (Any)
+              BINARY_OP               26 ([])
+              BUILD_TUPLE              2
+              BINARY_OP               26 ([])
+              LOAD_CONST               2 ('return')
+              LOAD_GLOBAL              0 (Dict)
+              LOAD_GLOBAL              2 (str)
+              LOAD_GLOBAL              6 (Any)
+              BUILD_TUPLE              2
+              BINARY_OP               26 ([])
+              BUILD_MAP                2
+              RETURN_VALUE
+
+Disassembly of <code object _compute_enhanced_statistics at 0x00000249AB5E45D0, file "D:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\data_saver.py", line 15>:
+  15            RESUME                   0
+
+  25            BUILD_MAP                0
+                STORE_FAST               1 (stats)
+
+  28            LOAD_GLOBAL              0 (np)
+                LOAD_ATTR                2 (array)
+                PUSH_NULL
+
+... and 1323 more lines of bytecode
+
+================================================================================
+Analyzing: design_space.cpython-314.pyc
+================================================================================
+
+=== <module> ===
+Filename: D:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\design_space.py
+Line: 1
+Arguments: 0
+Local vars: 0
+Names: __doc__, numpy, np, pandas, pd, pathlib, Path, typing, Tuple, load_design_space, transform_to_numeric, validate_design_space, generate_fallback_design_space
+Constants (13 total):
+  [0] str: '\n设计空间加载和转换模块\n负责从CSV文件加载设计空间并转换为数值格式\n'
+  [2] tuple: ('Path',)
+  [3] tuple: ('Tuple',)
+  [4] <code object __annotate__>
+  [5] <code object load_design_space>
+  [6] <code object __annotate__>
+  [7] <code object transform_to_numeric>
+  [8] <code object __annotate__>
+  [9] <code object validate_design_space>
+
+--- Nested functions/classes ---
+  === __annotate__ ===
+  Filename: D:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\design_space.py
+  Line: 14
+  Arguments: 1
+  Local vars: 1
+  Variables: format
+  Names: Tuple, np, ndarray, pd, DataFrame
+  Constants (2 total):
+    [0] int: 2
+    [1] str: 'return'
+
+  === load_design_space ===
+  Filename: D:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\modules\design_space.py
+  Line: 14
+  Arguments: 1
+  Local vars: 7
+  Variables: design_space_path, df_design, col, unique_vals, design_space, e, traceback
+  Names: isinstance, str, Path, pd, read_csv, print, shape, name, list, columns, unique, len, transform_to_numeric, validate_design_space, Exception, traceback, print_exc, generate_fallback_design_space
+  Constants (13 total):
+    [0] str: '\n从CSV文件加载设计空间并转换为数值格式\n\nArgs:\n    design_space_path: CSV文件路径 ...'
+Error processing tests\is_EUR_work\00_plans\251206\scripts\modules\__pycache__\design_space.cpython-314.pyc: 'gbk' codec can't encode character '\u2713' in position 14: illegal multibyte sequence

@@ -31,9 +31,9 @@ def is_categorical(dtype) -> bool:
     使用pandas官方API，更健壮且支持nullable types
     """
     return (
-        pd.api.types.is_categorical_dtype(dtype) or
-        pd.api.types.is_string_dtype(dtype) or
-        pd.api.types.is_object_dtype(dtype)
+        pd.api.types.is_categorical_dtype(dtype)
+        or pd.api.types.is_string_dtype(dtype)
+        or pd.api.types.is_object_dtype(dtype)
     )
 
 
@@ -197,6 +197,9 @@ class WarmupSampler:
         output_dir: str = "sample",
         merge: bool = False,
         subject_col_name: str = "subject_id",
+        interaction_mode: str = "free",
+        interaction_pairs_to_explore: List[Tuple[int, int]] = None,
+        min_config_per_pair: int = 2,
     ):
         """
         生成采样文件
@@ -206,6 +209,9 @@ class WarmupSampler:
             output_dir: 输出目录
             merge: 是否合并为单个CSV
             subject_col_name: 被试编号列名（仅在merge=True时使用）
+            interaction_mode: Core-2b交互对探索模式 ("free"/"specified_only"/"hybrid")
+            interaction_pairs_to_explore: 用户指定的可疑交互对列表
+            min_config_per_pair: 每个指定对的最少配置数（仅hybrid模式生效）
 
         Returns:
             导出的文件列表
@@ -222,8 +228,14 @@ class WarmupSampler:
         # 实际被试数需要从core1_samples反推
         n_subjects_actual = budget["core1_samples"] // budget["core1_configs"]
 
-        # 生成五步采样方案
-        all_samples = self._generate_five_step_samples(budget, n_subjects_actual)
+        # 生成五步采样方案（传递交互对参数）
+        all_samples = self._generate_five_step_samples(
+            budget,
+            n_subjects_actual,
+            interaction_mode=interaction_mode,
+            interaction_pairs_to_explore=interaction_pairs_to_explore,
+            min_config_per_pair=min_config_per_pair,
+        )
 
         exported_files = []
 
@@ -236,7 +248,9 @@ class WarmupSampler:
 
             print(f"[OK] 已生成合并文件: {merged_path}")
             print(f"  总样本数: {len(merged_df)}")
-            print(f"  包含列: {subject_col_name} + {', '.join(self.estimator.factor_names)}")
+            print(
+                f"  包含列: {subject_col_name} + {', '.join(self.estimator.factor_names)}"
+            )
             print()
 
         else:
@@ -330,20 +344,24 @@ class WarmupSampler:
             print(f"  3. 全中位数: idx={idx}")
 
         # 4. 奇数因子高，偶数因子低
-        target = pd.Series({
-            col: get_col_max(df[col]) if i % 2 == 0 else get_col_min(df[col])
-            for i, col in enumerate(df.columns)
-        })
+        target = pd.Series(
+            {
+                col: get_col_max(df[col]) if i % 2 == 0 else get_col_min(df[col])
+                for i, col in enumerate(df.columns)
+            }
+        )
         idx = self._find_closest_config(target)
         if idx not in core1_indices:
             core1_indices.append(idx)
             print(f"  4. 奇数高偶数低: idx={idx}")
 
         # 5. 偶数因子高，奇数因子低
-        target = pd.Series({
-            col: get_col_min(df[col]) if i % 2 == 0 else get_col_max(df[col])
-            for i, col in enumerate(df.columns)
-        })
+        target = pd.Series(
+            {
+                col: get_col_min(df[col]) if i % 2 == 0 else get_col_max(df[col])
+                for i, col in enumerate(df.columns)
+            }
+        )
         idx = self._find_closest_config(target)
         if idx not in core1_indices:
             core1_indices.append(idx)
@@ -352,20 +370,24 @@ class WarmupSampler:
         # 6. 前半因子高，后半因子低
         n_factors = len(df.columns)
         mid = n_factors // 2
-        target = pd.Series({
-            col: get_col_max(df[col]) if i < mid else get_col_min(df[col])
-            for i, col in enumerate(df.columns)
-        })
+        target = pd.Series(
+            {
+                col: get_col_max(df[col]) if i < mid else get_col_min(df[col])
+                for i, col in enumerate(df.columns)
+            }
+        )
         idx = self._find_closest_config(target)
         if idx not in core1_indices:
             core1_indices.append(idx)
             print(f"  6. 前半高后半低: idx={idx}")
 
         # 7. 前半因子低，后半因子高
-        target = pd.Series({
-            col: get_col_min(df[col]) if i < mid else get_col_max(df[col])
-            for i, col in enumerate(df.columns)
-        })
+        target = pd.Series(
+            {
+                col: get_col_min(df[col]) if i < mid else get_col_max(df[col])
+                for i, col in enumerate(df.columns)
+            }
+        )
         idx = self._find_closest_config(target)
         if idx not in core1_indices:
             core1_indices.append(idx)
@@ -379,7 +401,11 @@ class WarmupSampler:
             n_perturb = np.random.randint(1, 3)
             perturb_cols = np.random.choice(df.columns, size=n_perturb, replace=False)
             for col in perturb_cols:
-                target[col] = get_col_max(df[col]) if np.random.rand() > 0.5 else get_col_min(df[col])
+                target[col] = (
+                    get_col_max(df[col])
+                    if np.random.rand() > 0.5
+                    else get_col_min(df[col])
+                )
             idx = self._find_closest_config(target)
             if idx not in core1_indices:
                 core1_indices.append(idx)
@@ -400,7 +426,9 @@ class WarmupSampler:
         """找到最接近目标值的配置（使用真正的Gower距离）"""
         distances = {}
         for idx in self.design_df.index:
-            distances[idx] = gower_distance(target, self.design_df.loc[idx], self.design_df)
+            distances[idx] = gower_distance(
+                target, self.design_df.loc[idx], self.design_df
+            )
         return min(distances, key=distances.get)
 
     def _select_maximin_next(self, existing_indices: List[int]) -> Optional[int]:
@@ -416,12 +444,10 @@ class WarmupSampler:
                 continue
 
             # 计算到已选点的最小Gower距离
-            min_dist = float('inf')
+            min_dist = float("inf")
             for ex_idx in existing_indices:
                 dist = gower_distance(
-                    self.design_df.loc[idx],
-                    self.design_df.loc[ex_idx],
-                    self.design_df
+                    self.design_df.loc[idx], self.design_df.loc[ex_idx], self.design_df
                 )
                 min_dist = min(min_dist, dist)
 
@@ -464,7 +490,9 @@ class WarmupSampler:
         boundary_indices = boundary_indices - used_indices
 
         print(f"  单维极端去重后: {len(boundary_indices)}个独特配置")
-        print(f"  （理论{2*len(df.columns)}个，去重节省{2*len(df.columns)-len(boundary_indices)}个）")
+        print(
+            f"  （理论{2*len(df.columns)}个，去重节省{2*len(df.columns)-len(boundary_indices)}个）"
+        )
 
         return list(boundary_indices)
 
@@ -484,6 +512,7 @@ class WarmupSampler:
 
         try:
             from scipy.stats import qmc
+
             has_scipy = True
         except ImportError:
             print("  [警告] 未安装scipy，退化为随机采样")
@@ -528,8 +557,11 @@ class WarmupSampler:
                         target_config[col] = col_min + sample[i] * (col_max - col_min)
 
                 # 使用Gower距离找最近的离散配置
-                available_indices = [idx for idx in df.index
-                                    if idx not in used_indices and idx not in lhs_indices]
+                available_indices = [
+                    idx
+                    for idx in df.index
+                    if idx not in used_indices and idx not in lhs_indices
+                ]
                 if not available_indices:
                     break
 
@@ -544,19 +576,387 @@ class WarmupSampler:
             # 退化为随机采样
             available = list(set(df.index) - used_indices)
             n_actual = min(n_samples, len(available))
-            lhs_indices = np.random.choice(available, size=n_actual, replace=False).tolist()
+            lhs_indices = np.random.choice(
+                available, size=n_actual, replace=False
+            ).tolist()
 
         print(f"  [OK] 选择{len(lhs_indices)}个LHS配置")
         return lhs_indices
 
-    def _generate_five_step_samples(self, budget: dict, n_subjects: int):
+    def _select_interaction_aware_configs(
+        self,
+        n_configs: int,
+        interaction_mode: str = "free",
+        interaction_pairs_to_explore: List[Tuple[int, int]] = None,
+        min_config_per_pair: int = 2,
+        used_indices: set = None,
+    ) -> List[int]:
+        """
+        交互对感知的Core-2b配置选择
+
+        支持三种模式：
+        1. "free": 随机从所有可用配置中选择（当前默认行为）
+        2. "specified_only": 只选择能覆盖指定交互对的配置
+        3. "hybrid": 优先分配给指定对，剩余预算自由探索（推荐）
+
+        Args:
+            n_configs: 需要选择的配置总数
+            interaction_mode: 模式选择
+            interaction_pairs_to_explore: 用户指定的可疑交互对列表，如[(3,4), (0,1)]
+            min_config_per_pair: 每个指定对的最少配置数
+            used_indices: 已使用的索引集合
+
+        Returns:
+            选中的配置索引列表
+        """
+        if used_indices is None:
+            used_indices = set()
+
+        # 如果是free模式或未指定交互对，使用原有的随机采样
+        if (
+            interaction_mode == "free"
+            or interaction_pairs_to_explore is None
+            or len(interaction_pairs_to_explore) == 0
+        ):
+            available = list(set(self.design_df.index) - used_indices)
+            n_actual = min(n_configs, len(available))
+            return np.random.choice(available, size=n_actual, replace=False).tolist()
+
+        # 模式1: specified_only - 只选择能覆盖指定对的配置
+        if interaction_mode == "specified_only":
+            selected = []
+            available = list(set(self.design_df.index) - used_indices)
+
+            # 将交互对转换为列对（确保索引正确）
+            df_cols = list(self.design_df.columns)
+            pair_indices = [
+                (min(i, j), max(i, j)) for i, j in interaction_pairs_to_explore
+            ]
+
+            # 对每个交互对分配配置
+            configs_per_pair = n_configs // len(pair_indices)
+            remainder = n_configs % len(pair_indices)
+
+            for pair_idx, (i, j) in enumerate(pair_indices):
+                col_i, col_j = df_cols[i], df_cols[j]
+                n_for_pair = configs_per_pair + (1 if pair_idx < remainder else 0)
+
+                # 获取该对可能值组合的配置
+                pair_specific = []
+                for idx in available:
+                    if idx not in selected:
+                        row = self.design_df.loc[idx]
+                        val_i, val_j = row[col_i], row[col_j]
+                        # 优选值组合多样的配置
+                        pair_specific.append((idx, (val_i, val_j)))
+
+                # 随机抽样
+                if pair_specific:
+                    sample_count = min(n_for_pair, len(pair_specific))
+                    selected_indices = np.random.choice(
+                        len(pair_specific),
+                        size=sample_count,
+                        replace=False,
+                    ).tolist()
+                    selected.extend([pair_specific[i][0] for i in selected_indices])
+
+            # 如果选择数不足，补充随机配置
+            if len(selected) < n_configs:
+                remaining = list(set(available) - set(selected))
+                n_need = n_configs - len(selected)
+                if remaining:
+                    extra = np.random.choice(
+                        remaining, size=min(n_need, len(remaining)), replace=False
+                    ).tolist()
+                    selected.extend(extra)
+
+            return selected[:n_configs]
+
+        # 模式2: hybrid - 保护分配 + 自由探索（推荐）
+        if interaction_mode == "hybrid":
+            df_cols = list(self.design_df.columns)
+            available = list(set(self.design_df.index) - used_indices)
+
+            # 标准化交互对
+            pair_indices = [
+                (min(i, j), max(i, j)) for i, j in interaction_pairs_to_explore
+            ]
+
+            # Step 1: 为每个指定对分配保护配置数
+            protected_allocation = {}
+            total_protected = 0
+
+            for pair_idx, (i, j) in enumerate(pair_indices):
+                col_i, col_j = df_cols[i], df_cols[j]
+                n_protected = min_config_per_pair
+
+                # 收集该对的所有可用配置
+                pair_configs = []
+                for idx in available:
+                    row = self.design_df.loc[idx]
+                    pair_configs.append((idx, (row[col_i], row[col_j])))
+
+                # 选择多样的配置
+                if pair_configs:
+                    # 按值组合多样性排序
+                    pair_configs.sort(key=lambda x: x[1])
+                    selected_for_pair = [
+                        pair_configs[k][0]
+                        for k in np.linspace(
+                            0,
+                            len(pair_configs) - 1,
+                            num=min(n_protected, len(pair_configs)),
+                        ).astype(int)
+                    ]
+                    protected_allocation[pair_idx] = selected_for_pair
+                    total_protected += len(selected_for_pair)
+
+            # Step 2: 收集所有保护配置
+            protected_configs = []
+            for configs_list in protected_allocation.values():
+                protected_configs.extend(configs_list)
+
+            protected_configs = list(set(protected_configs))  # 去重
+
+            # Step 3: 剩余预算用于自由探索
+            remaining_budget = n_configs - len(protected_configs)
+            remaining_available = list(set(available) - set(protected_configs))
+
+            free_exploration = []
+            if remaining_budget > 0 and remaining_available:
+                n_free = min(remaining_budget, len(remaining_available))
+                free_exploration = np.random.choice(
+                    remaining_available, size=n_free, replace=False
+                ).tolist()
+
+            # 合并
+            result = protected_configs + free_exploration
+            return result[:n_configs]
+
+        # 默认返回随机采样
+        available = list(set(self.design_df.index) - used_indices)
+        n_actual = min(n_configs, len(available))
+        return np.random.choice(available, size=n_actual, replace=False).tolist()
+
+    def _select_doptimal_configs(self, n_configs: int, used_indices: set) -> List[int]:
+        """
+        使用D-optimal准则选择主效应配置
+
+        D-optimality最大化Fisher信息矩阵的行列式，从而最小化参数估计方差的几何平均。
+        这是实验设计中的标准方法（Box, Hunter, & Hunter, 2005）。
+
+        Args:
+            n_configs: 需要选择的配置数
+            used_indices: 已使用的配置索引集合
+
+        Returns:
+            选中的配置索引列表
+        """
+        from pyDOE3.doe_optimal import optimal_design
+
+        available = list(set(self.design_df.index) - used_indices)
+
+        # 如果可用配置不足，全部返回
+        if len(available) <= n_configs:
+            print(f"  可用配置数({len(available)}) <= 需求数({n_configs})，全部选择")
+            return available
+
+        try:
+            # 准备候选集：标准化为数值矩阵
+            candidates = self._normalize_design_to_candidates(available)
+
+            # 如果候选集太大，先采样减少计算成本
+            # 注意：采样阈值不能太小，否则D-efficiency会显著下降
+            if len(available) > 1000:
+                print(f"  候选集较大({len(available)})，采样到1000个进行优化")
+                sample_idx = np.random.choice(len(available), size=1000, replace=False)
+                candidates = candidates[sample_idx]
+                available_sampled = [available[i] for i in sample_idx]
+            else:
+                available_sampled = available
+
+            # 应用D-optimal设计
+            design, info = optimal_design(
+                candidates,
+                n_points=n_configs,
+                degree=1,  # 线性模型
+                criterion="D",  # D-optimality
+                method="detmax",  # Detmax算法
+            )
+
+            # 提取D-efficiency
+            d_efficiency = info.get("D_eff", "N/A")
+            print(f"  D-efficiency: {d_efficiency}%")
+
+            # 映射回原始索引
+            # design是从candidates中选出的行，需要找到对应的available_sampled索引
+            selected_mask = np.any(design != 0, axis=1)  # 非零行
+            if selected_mask.sum() >= n_configs:
+                selected_local_idx = np.where(selected_mask)[0][:n_configs]
+            else:
+                # 使用更鲁棒的方法：找到在candidates中最接近的行
+                selected_local_idx = []
+                for design_row in design:
+                    # 找到candidates中最接近的行
+                    distances = np.linalg.norm(candidates - design_row, axis=1)
+                    closest_idx = np.argmin(distances)
+                    if closest_idx not in selected_local_idx:
+                        selected_local_idx.append(closest_idx)
+                    if len(selected_local_idx) >= n_configs:
+                        break
+
+            selected_indices = [available_sampled[i] for i in selected_local_idx[:n_configs]]
+
+            return selected_indices
+
+        except Exception as e:
+            # D-optimal失败时回退到分层采样
+            print(f"  [警告] D-optimal优化失败: {e}")
+            print(f"  回退到分层采样...")
+            return self._select_stratified_configs(n_configs, used_indices)
+
+    def _normalize_design_to_candidates(self, available_indices: List[int]) -> np.ndarray:
+        """
+        将设计空间的配置标准化为[0,1]范围的数值矩阵
+
+        处理混合类型变量：
+        - 数值变量：min-max标准化
+        - 布尔变量：转为0/1
+        - 分类变量：one-hot编码
+
+        Args:
+            available_indices: 可用配置的索引列表
+
+        Returns:
+            标准化后的数值矩阵 (n_configs, n_features)
+        """
+        df_sub = self.design_df.iloc[available_indices]
+        X_list = []
+
+        for col in df_sub.columns:
+            col_data = df_sub[col]
+
+            if col_data.dtype in ["float64", "int64", "int32", "float32"]:
+                # 数值变量：min-max标准化到[0,1]
+                col_min, col_max = col_data.min(), col_data.max()
+                if col_max > col_min:
+                    normalized = (col_data.values - col_min) / (col_max - col_min)
+                    X_list.append(normalized)
+                else:
+                    X_list.append(np.zeros(len(col_data)))
+
+            elif col_data.dtype == "bool":
+                # 布尔变量：转为0/1
+                X_list.append(col_data.astype(int).values)
+
+            else:
+                # 分类变量：强制使用序数编码（避免维度爆炸导致D-efficiency为0）
+                # 原因：对于3类变量，one-hot编码会产生3列，导致特征维度过高
+                # 例如：6个因子 → 14维特征 → D-efficiency: 0.001%
+                #      改用序数编码 → 6维特征 → D-efficiency: 18%
+                unique_cats = col_data.unique()
+                cat_to_idx = {cat: idx for idx, cat in enumerate(unique_cats)}
+                encoded = col_data.map(cat_to_idx).values
+                # 标准化到[0,1]
+                X_list.append(encoded / (len(unique_cats) - 1) if len(unique_cats) > 1 else encoded)
+
+        if not X_list:
+            # 空设计空间，返回形状正确的零矩阵
+            return np.zeros((len(available_indices), 1))
+
+        return np.column_stack(X_list)
+
+    def _select_stratified_configs(self, n_configs: int, used_indices: set) -> List[int]:
+        """
+        分层采样：确保每个因子的不同水平都有表示（D-optimal的简化fallback）
+
+        Args:
+            n_configs: 需要选择的配置数
+            used_indices: 已使用的配置索引集合
+
+        Returns:
+            选中的配置索引列表
+        """
+        available = list(set(self.design_df.index) - used_indices)
+
+        if len(available) <= n_configs:
+            return available
+
+        # 贪心策略：每次选择能最大化因子水平覆盖度的配置
+        selected = []
+        remaining = available.copy()
+
+        for _ in range(n_configs):
+            if not remaining:
+                break
+
+            best_idx = None
+            best_coverage = -1
+
+            # 评估每个候选配置的覆盖度增益
+            for candidate in remaining:
+                # 计算加入该配置后的总覆盖度
+                test_subset = selected + [candidate]
+                coverage = self._compute_factor_coverage(test_subset)
+
+                if coverage > best_coverage:
+                    best_coverage = coverage
+                    best_idx = candidate
+
+            if best_idx is not None:
+                selected.append(best_idx)
+                remaining.remove(best_idx)
+
+        return selected
+
+    def _compute_factor_coverage(self, config_indices: List[int]) -> float:
+        """
+        计算配置子集的因子水平覆盖度
+
+        Args:
+            config_indices: 配置索引列表
+
+        Returns:
+            覆盖度分数 (0-1之间，越高越好)
+        """
+        if not config_indices:
+            return 0.0
+
+        df_sub = self.design_df.iloc[config_indices]
+        total_coverage = 0.0
+
+        for col in df_sub.columns:
+            n_unique_in_subset = df_sub[col].nunique()
+            n_unique_total = self.design_df[col].nunique()
+            if n_unique_total > 0:
+                total_coverage += n_unique_in_subset / n_unique_total
+
+        # 平均覆盖度
+        return total_coverage / len(df_sub.columns) if len(df_sub.columns) > 0 else 0.0
+
+    def _generate_five_step_samples(
+        self,
+        budget: dict,
+        n_subjects: int,
+        interaction_mode: str = "free",
+        interaction_pairs_to_explore: List[Tuple[int, int]] = None,
+        min_config_per_pair: int = 2,
+    ):
         """
         生成五步采样方案（改进版）
 
         改进：
         1. Core-1: 战略性选择
         2. Boundary: 去重算法
-        3. LHS: 全局采样
+        3. Core-2b: 交互对感知采样（支持三种模式）
+        4. LHS: 全局采样
+
+        Args:
+            budget: 预算字典
+            n_subjects: 被试数量
+            interaction_mode: Core-2b探索模式
+            interaction_pairs_to_explore: 指定的交互对
+            min_config_per_pair: 每对的最少配置数
         """
         print()
         print("=" * 80)
@@ -564,17 +964,24 @@ class WarmupSampler:
         print("=" * 80)
         print()
 
+        # 记录Core-2b模式
+        if interaction_mode != "free" and interaction_pairs_to_explore:
+            print(f"[Core-2b模式] {interaction_mode.upper()}")
+            print(f"  指定交互对: {interaction_pairs_to_explore}")
+            print(f"  每对最少配置: {min_config_per_pair}个")
+            print()
+
         all_samples = []
         used_indices = set()
 
         # Step 1: Core-1 - 战略性选择
-        core1_indices = self._select_core1_strategic(n_core1=budget['core1_configs'])
+        core1_indices = self._select_core1_strategic(n_core1=budget["core1_configs"])
         used_indices.update(core1_indices)
         core1_configs = self.design_df.loc[core1_indices]
 
         # Step 2: Boundary - 去重选择
         boundary_indices = self._select_boundary_configs(used_indices)
-        n_boundary_needed = budget['boundary_configs']
+        n_boundary_needed = budget["boundary_configs"]
         if len(boundary_indices) > n_boundary_needed:
             # 如果边界点太多，随机选择一部分
             boundary_indices = np.random.choice(
@@ -582,18 +989,40 @@ class WarmupSampler:
             ).tolist()
         used_indices.update(boundary_indices)
 
-        # Step 3: Core-2a/2b - 随机采样（简化）
-        n_core2_total = budget['core2a_configs'] + budget['core2b_configs']
-        available = list(set(self.design_df.index) - used_indices)
-        if len(available) < n_core2_total:
-            print(f"  [警告] 可用配置不足，Core-2a/2b只能分配{len(available)}个")
-            n_core2_total = len(available)
+        # Step 3a: Core-2a - D-optimal主效应采样
+        n_core2a = budget["core2a_configs"]
+        print(f"[Core-2a] D-optimal主效应采样...")
+        core2a_indices = self._select_doptimal_configs(
+            n_configs=n_core2a,
+            used_indices=used_indices
+        )
+        used_indices.update(core2a_indices)
+        print(f"  已选择{len(core2a_indices)}个D-optimal配置")
+        print()
 
-        core2_indices = np.random.choice(available, size=n_core2_total, replace=False).tolist()
-        used_indices.update(core2_indices)
+        # Step 3b: Core-2b - 交互对感知采样
+        n_core2b = budget["core2b_configs"]
+        if n_core2b > 0:
+            print(f"[Core-2b] 交互对感知采样...")
+            core2b_indices = self._select_interaction_aware_configs(
+                n_configs=n_core2b,
+                interaction_mode=interaction_mode,
+                interaction_pairs_to_explore=interaction_pairs_to_explore,
+                min_config_per_pair=min_config_per_pair,
+                used_indices=used_indices,
+            )
+            used_indices.update(core2b_indices)
+            print(f"  已选择{len(core2b_indices)}个交互对配置")
+        else:
+            core2b_indices = []
+            print("[Core-2b] 跳过交互效应探索")
+        print()
+
+        # 合并Core-2a和Core-2b
+        core2_indices = core2a_indices + core2b_indices
 
         # Step 4: LHS - 全局采样
-        n_lhs = budget['lhs_configs']
+        n_lhs = budget["lhs_configs"]
         lhs_indices = self._select_lhs_global(n_lhs, used_indices)
         used_indices.update(lhs_indices)
 
@@ -609,7 +1038,9 @@ class WarmupSampler:
         pool_size_per_subject = len(pool_indices) // n_subjects
 
         print(f"配置池大小: {len(pool_indices)}个")
-        print(f"每个被试分配: {pool_size_per_subject}个（来自配置池）+ {len(core1_indices)}个（Core-1）")
+        print(
+            f"每个被试分配: {pool_size_per_subject}个（来自配置池）+ {len(core1_indices)}个（Core-1）"
+        )
         print()
 
         # 随机打乱pool
@@ -620,7 +1051,7 @@ class WarmupSampler:
 
             # 1. Core-1（所有被试共享）
             core1_df = core1_configs.copy()
-            core1_df['subject_id'] = subject_id
+            core1_df["subject_id"] = subject_id
             subject_samples.append(core1_df)
 
             # 2. 从pool中分配
@@ -632,25 +1063,31 @@ class WarmupSampler:
 
             subject_pool_indices = pool_indices[start_idx:end_idx]
             pool_df = self.design_df.loc[subject_pool_indices].copy()
-            pool_df['subject_id'] = subject_id
+            pool_df["subject_id"] = subject_id
             subject_samples.append(pool_df)
 
             # 合并该被试的所有样本
             subject_df = pd.concat(subject_samples, ignore_index=True)
 
             # 打乱顺序（避免顺序效应）
-            subject_df = subject_df.sample(frac=1, random_state=42 + subject_id).reset_index(drop=True)
+            subject_df = subject_df.sample(
+                frac=1, random_state=42 + subject_id
+            ).reset_index(drop=True)
 
             all_samples.append(subject_df)
 
-            print(f"  被试{subject_id}: {len(subject_df)}个样本 ({len(core1_indices)} Core-1 + {len(subject_pool_indices)} 配置池)")
+            print(
+                f"  被试{subject_id}: {len(subject_df)}个样本 ({len(core1_indices)} Core-1 + {len(subject_pool_indices)} 配置池)"
+            )
 
         print()
         return all_samples
 
-    def _generate_readme(self, readme_path: Path, budget: dict, n_subjects: int, merged: bool):
+    def _generate_readme(
+        self, readme_path: Path, budget: dict, n_subjects: int, merged: bool
+    ):
         """生成采样说明文档"""
-        with open(readme_path, 'w', encoding='utf-8') as f:
+        with open(readme_path, "w", encoding="utf-8") as f:
             f.write("=" * 80 + "\n")
             f.write("预热阶段采样说明（改进版）\n")
             f.write("=" * 80 + "\n\n")
@@ -719,7 +1156,9 @@ def main():
     print()
 
     # Step 1: 加载设计空间
-    design_csv = input("请输入设计空间CSV路径（或按Enter使用默认 'design_space.csv'）: ").strip()
+    design_csv = input(
+        "请输入设计空间CSV路径（或按Enter使用默认 'design_space.csv'）: "
+    ).strip()
     if not design_csv:
         design_csv = "design_space.csv"
 
@@ -742,22 +1181,24 @@ def main():
         print("[错误] 输入必须是整数")
         sys.exit(1)
 
-    skip_interaction = input("  是否跳过交互效应探索？(y/N): ").strip().lower() == 'y'
+    skip_interaction = input("  是否跳过交互效应探索？(y/N): ").strip().lower() == "y"
     print()
 
     # Step 3: 评估预算
-    adequacy, budget = sampler.evaluate_budget(n_subjects, trials_per_subject, skip_interaction)
+    adequacy, budget = sampler.evaluate_budget(
+        n_subjects, trials_per_subject, skip_interaction
+    )
 
     # Step 4: 询问是否执行采样
     if adequacy in ["预算不足", "严重不足"]:
         print(f"[!] 预算评估为【{adequacy}】，不建议继续")
         confirm = input("是否仍要生成采样方案？(y/N): ").strip().lower()
-        if confirm != 'y':
+        if confirm != "y":
             print("[取消] 已退出")
             sys.exit(0)
     else:
         confirm = input("是否生成采样方案？(Y/n): ").strip().lower()
-        if confirm == 'n':
+        if confirm == "n":
             print("[取消] 已退出")
             sys.exit(0)
 
@@ -765,10 +1206,12 @@ def main():
     print()
     print("输出配置:")
     output_dir = input("  输出目录（默认 'sample'）: ").strip() or "sample"
-    merge = input("  是否合并为单个CSV？(y/N): ").strip().lower() == 'y'
+    merge = input("  是否合并为单个CSV？(y/N): ").strip().lower() == "y"
 
     if merge:
-        subject_col = input("  被试编号列名（默认 'subject_id'）: ").strip() or "subject_id"
+        subject_col = (
+            input("  被试编号列名（默认 'subject_id'）: ").strip() or "subject_id"
+        )
     else:
         subject_col = "subject_id"
 
@@ -791,6 +1234,7 @@ def main():
     except Exception as e:
         print(f"[错误] 生成采样文件失败: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)
 

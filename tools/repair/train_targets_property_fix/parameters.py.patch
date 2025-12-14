@@ -1,0 +1,21 @@
+--- a/aepsych/transforms/parameters.py
++++ b/aepsych/transforms/parameters.py
+@@ -753,6 +753,17 @@ class ParameterTransformedModel:
+         """Delegate train_inputs setting to the underlying model."""
+         self._base_obj.train_inputs = value
+     # ========== End of fix ==========
++
++    # ========== Fix for train_targets shadowing bug ==========
++    @property
++    def train_targets(self) -> torch.Tensor | None:
++        """Delegate train_targets to the underlying model."""
++        return self._base_obj.train_targets
++
++    @train_targets.setter
++    def train_targets(self, value: torch.Tensor | None) -> None:
++        """Delegate train_targets setting to the underlying model."""
++        self._base_obj.train_targets = value
++    # ========== End of fix ==========
+
+     @_promote_1d
+     def fit(self, train_x: torch.Tensor, train_y: torch.Tensor, **kwargs) -> None:

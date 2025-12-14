@@ -1,0 +1,202 @@
+
+================================================================================
+Analyzing: run_server_sps_test.cpython-314-pytest-9.0.2.pyc
+================================================================================
+
+=== <module> ===
+Filename: D:\ENVS\active-psych-sampling\tests\is_EUR_work\run_server_sps_test.py
+Line: 1
+Arguments: 0
+Local vars: 0
+Names: __doc__, builtins, @py_builtins, _pytest.assertion.rewrite, assertion, rewrite, @pytest_ar, sys, io, pathlib, Path, json, numpy, np, pandas, pd, datetime, platform, TextIOWrapper, stdout, buffer, stderr, __file__, parent, project_root, path, insert, str, custom_generators.pool_based_generator, custom_generators
+... and 20 more
+Constants (23 total):
+  [0] str: '\nServer Flow Test with Complete Reports\n使用AEPsych Server + S...'
+  [2] tuple: ('Path',)
+  [3] tuple: ('datetime',)
+  [4] str: 'win32'
+  [5] str: 'utf-8'
+  [6] str: 'replace'
+  [7] tuple: ('encoding', 'errors')
+  [8] str: 'extensions'
+  [9] str: 'tools'
+
+--- Nested functions/classes ---
+  === load_design_space ===
+  Filename: D:\ENVS\active-psych-sampling\tests\is_EUR_work\run_server_sps_test.py
+  Line: 38
+  Arguments: 0
+  Local vars: 5
+  Variables: design_space_path, df_design, df_numeric, design_space, e
+  Names: project_root, pd, read_csv, copy, astype, float, map, values, np, float64, print, shape, Exception
+  Constants (23 total):
+    [0] str: 'Load design space'
+    [1] str: 'data'
+    [2] str: 'only_independences'
+    [3] str: '6vars_x1binary_x2x35level_x44level_x53level_x6binary_1200com...'
+    [4] str: 'x1_binary'
+    [5] str: 'x2_5level_discrete'
+    [6] str: 'x3_5level_decimal'
+    [7] float: 0.25
+    [8] str: 'x4_4level_categorical'
+    [9] str: 'low'
+
+  === __annotate__ ===
+  Filename: D:\ENVS\active-psych-sampling\tests\is_EUR_work\run_server_sps_test.py
+  Line: 67
+  Arguments: 1
+  Local vars: 1
+  Variables: format
+  Names: str, np, ndarray
+  Constants (4 total):
+    [0] int: 2
+    [1] str: 'config_path'
+    [2] str: 'pool_points'
+    [3] str: 'return'
+
+  === update_config_with_pool ===
+  Filename: D:\ENVS\active-psych-sampling\tests\is_EUR_work\run_server_sps_test.py
+  Line: 67
+  Arguments: 2
+  Local vars: 10
+  Variables: config_path, pool_points, f, lines, new_lines, in_pool_section, pool_added, line, pool_str, updated_path
+  Names: open, readlines, strip, startswith, append, str, tolist, replace, writelines
+  Constants (15 total):
+    [0] str: 'Update config file with pool_points'
+    [1] str: 'r'
+    [2] str: 'utf-8'
+    [3] tuple: ('encoding',)
+    [5] bool: False
+    [6] str: '[PoolBasedGenerator]'
+    [7] bool: True
+    [8] str: '['
+    [9] str: 'pool_points = '
+
+  === run_server_test ===
+  Filename: D:\ENVS\active-psych-sampling\tests\is_EUR_work\run_server_sps_test.py
+  Line: 111
+  Arguments: 1
+  Local vars: 38
+  Variables: budget, timestamp, result_dir, data_dir, design_space, base_config, config_path, oracle, oracle_spec, oracle_spec_file, f, server, config, sampling_history, interaction_logs, history, trial_idx, x_config, name, x_array
+  ... and 18 more
+  Names: print, center, datetime, now, strftime, Path, __file__, parent, mkdir, load_design_space, update_config_with_pool, str, SingleSubject, open, json, dump, AEPsychServer, Config, configure, range, ask, np, array, parnames, float64, tolist, tell, append, strat, _strat
+  ... and 23 more
+  Constants (136 total):
+    [0] str: 'Run test using AEPsych Server with complete reports'
+    [1] str: 'AEPsych Server + SPS + BaseGP Prior Test'
+    [2] str: '%Y%m%d_%H%M%S'
+    [3] str: 'results'
+    [4] bool: True
+    [5] tuple: ('parents', 'exist_ok')
+    [6] str: 'data_files'
+    [7] tuple: ('exist_ok',)
+    [8] str: '\nResult directory: '
+    [9] str: 'Step 1: Load Design Space'
+
+
+================================================================================
+Disassembly of <module> (first 100 instructions):
+================================================================================
+
+  0           RESUME                   0
+
+  3           LOAD_CONST               0 ('\nServer Flow Test with Complete Reports\n使用AEPsych Server + SPS + BaseGP先验 + 相同被试群\n生成完整报告: summary.json, oracle_model_spec.json, sampling_history.npy, interaction_log.json\n')
+              STORE_NAME               0 (__doc__)
+
+  9           LOAD_SMALL_INT           0
+              LOAD_CONST               1 (None)
+              IMPORT_NAME              1 (builtins)
+              STORE_NAME               2 (@py_builtins)
+              LOAD_SMALL_INT           0
+              LOAD_CONST               1 (None)
+              IMPORT_NAME              3 (_pytest.assertion.rewrite)
+              IMPORT_FROM              4 (assertion)
+              SWAP                     2
+              POP_TOP
+              IMPORT_FROM              5 (rewrite)
+              STORE_NAME               6 (@pytest_ar)
+              POP_TOP
+              LOAD_SMALL_INT           0
+              LOAD_CONST               1 (None)
+              IMPORT_NAME              7 (sys)
+              STORE_NAME               7 (sys)
+
+ 10           LOAD_SMALL_INT           0
+              LOAD_CONST               1 (None)
+              IMPORT_NAME              8 (io)
+              STORE_NAME               8 (io)
+
+ 11           LOAD_SMALL_INT           0
+              LOAD_CONST               2 (('Path',))
+              IMPORT_NAME              9 (pathlib)
+              IMPORT_FROM             10 (Path)
+              STORE_NAME              10 (Path)
+              POP_TOP
+
+ 12           LOAD_SMALL_INT           0
+              LOAD_CONST               1 (None)
+              IMPORT_NAME             11 (json)
+              STORE_NAME              11 (json)
+
+ 13           LOAD_SMALL_INT           0
+              LOAD_CONST               1 (None)
+              IMPORT_NAME             12 (numpy)
+              STORE_NAME              13 (np)
+
+ 14           LOAD_SMALL_INT           0
+              LOAD_CONST               1 (None)
+              IMPORT_NAME             14 (pandas)
+              STORE_NAME              15 (pd)
+
+ 15           LOAD_SMALL_INT           0
+              LOAD_CONST               3 (('datetime',))
+              IMPORT_NAME             16 (datetime)
+              IMPORT_FROM             16 (datetime)
+              STORE_NAME              16 (datetime)
+              POP_TOP
+
+ 18           LOAD_NAME                7 (sys)
+              LOAD_ATTR               34 (platform)
+              LOAD_CONST               4 ('win32')
+              COMPARE_OP              88 (bool(==))
+              POP_JUMP_IF_FALSE       93 (to L1)
+              NOT_TAKEN
+
+ 19           LOAD_NAME                8 (io)
+              LOAD_ATTR               36 (TextIOWrapper)
+              PUSH_NULL
+              LOAD_NAME                7 (sys)
+              LOAD_ATTR               38 (stdout)
+              LOAD_ATTR               40 (buffer)
+              LOAD_CONST               5 ('utf-8')
+              LOAD_CONST               6 ('replace')
+              LOAD_CONST               7 (('encoding', 'errors'))
+              CALL_KW                  3
+              LOAD_NAME                7 (sys)
+              STORE_ATTR              19 (stdout)
+
+ 20           LOAD_NAME                8 (io)
+              LOAD_ATTR               36 (TextIOWrapper)
+              PUSH_NULL
+              LOAD_NAME                7 (sys)
+              LOAD_ATTR               42 (stderr)
+              LOAD_ATTR               40 (buffer)
+              LOAD_CONST               5 ('utf-8')
+              LOAD_CONST               6 ('replace')
+              LOAD_CONST               7 (('encoding', 'errors'))
+              CALL_KW                  3
+              LOAD_NAME                7 (sys)
+              STORE_ATTR              21 (stderr)
+
+ 23   L1:     LOAD_NAME               10 (Path)
+              PUSH_NULL
+              LOAD_NAME               22 (__file__)
+              CALL                     1
+              LOAD_ATTR               46 (parent)
+              LOAD_ATTR               46 (parent)
+              LOAD_ATTR               46 (parent)
+              STORE_NAME              24 (project_root)
+
+ 24           LOAD_NAME                7 (sys)
+
+... and 2171 more lines of bytecode

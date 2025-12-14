@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """
 快速启动脚本 - 两阶段实验规划
 只需修改下方配置参数，即可快速使用预热采样和数据分析功能
@@ -14,6 +16,25 @@
 """
 
 import sys
+import os
+
+# 设置编码 - Windows 兼容性修复
+os.environ["PYTHONIOENCODING"] = "utf-8"
+
+# 处理 Windows PowerShell 的编码问题
+if sys.platform == "win32":
+    # 强制使用 UTF-8 编码，避免 GBK 乱码
+    import io
+
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+else:
+    # Linux/Mac 直接重新配置
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except:
+        pass
 from pathlib import Path
 import time
 from typing import Dict, Any, Optional
@@ -37,6 +58,8 @@ except ImportError:
     API_AVAILABLE = False
     print("[警告] 新的 API 模块不可用，将使用传统实现")
 
+API_AVAILABLE = False  # 强制使用传统实现以显示确认信息
+
 # ============================================================================
 # 配置参数 - 请根据需要修改
 # ============================================================================
@@ -51,7 +74,7 @@ except ImportError:
 # "all"        - 步骤1 -> 步骤1.5(模拟) -> 步骤2 -> 步骤3
 # "chain12"    - 使用流程管理器运行步骤1->2（推荐）
 # "chain123"   - 使用流程管理器运行步骤1->2->3（推荐）
-MODE = "all"  # 运行 Step1 -> Step1.5(模拟) -> Step2 -> Step3
+MODE = "step1"  # 运行 Step1 -> Step1.5(模拟) -> Step2 -> Step3
 
 # ----------------------------------------------------------------------------
 # ALL 模式专用配置：统一控制所有步骤的参数（推荐使用）
@@ -71,9 +94,16 @@ ALL_CONFIG = {
     ),
     # Phase 1 预算
     "n_subjects": 5,  # Phase 1 被试数量
-    "trials_per_subject": 30,  # Phase 1 每个被试的测试次数
+    "trials_per_subject": 20,  # Phase 1 每个被试的测试次数
     "skip_interaction": False,  # 是否跳过交互效应探索
-    "auto_confirm": True,  # 是否自动确认（True=不询问）
+    "auto_confirm": False,  # 是否自动确认（True=不询问）
+    # ==================== Core-2b 交互对探索模式 ====================
+    "interaction_mode": "hybrid",  # "free" / "specified_only" / "hybrid"
+    # "free": 随机探索所有交互对（当前行为）
+    # "specified_only": 只探索指定的交互对（高效但可能遗漏）
+    # "hybrid": 优先保证指定对的覆盖，剩余预算自由探索（推荐）✨
+    "interaction_pairs_to_explore": [(3, 4), (0, 1)],  # 用户指定的"可疑"交互对
+    "min_config_per_pair": 2,  # 每个指定对的最少配置数（仅mode2生效）
     # ==================== 模拟被试参数 (Step1.5) ====================
     "seed": 42,  # 随机种子
     "population_mean": 0.0,  # 群体权重均值
@@ -83,7 +113,7 @@ ALL_CONFIG = {
     # Likert输出配置
     "likert_levels": 5,  # Likert量表等级数
     "likert_mode": "tanh",  # tanh=拟真分布 / percentile=均匀分布
-    "likert_sensitivity": 0.3,  # Likert灵敏度 (修正: 从2.0降至0.3以获得更均衡的分布)
+    "likert_sensitivity": 2.0,  # Likert灵敏度 (调整为高敏感度以获得更分散的分布)
     # 交互效应
     "interaction_pairs": [(3, 4), (0, 1)],  # 指定交互对 (索引从0开始)
     "num_interactions": 0,  # 额外随机生成的交互项数
@@ -323,6 +353,9 @@ def _apply_all_config() -> None:
         "trials_per_subject",
         "skip_interaction",
         "auto_confirm",
+        "interaction_mode",
+        "interaction_pairs_to_explore",
+        "min_config_per_pair",
     ]:
         if param in ALL_CONFIG:
             STEP1_CONFIG[param] = ALL_CONFIG[param]
@@ -477,6 +510,11 @@ def run_step1():
             output_dir=STEP1_CONFIG["output_dir"],
             merge=STEP1_CONFIG["merge"],
             subject_col_name=STEP1_CONFIG["subject_col_name"],
+            interaction_mode=STEP1_CONFIG.get("interaction_mode", "free"),
+            interaction_pairs_to_explore=STEP1_CONFIG.get(
+                "interaction_pairs_to_explore"
+            ),
+            min_config_per_pair=STEP1_CONFIG.get("min_config_per_pair", 2),
         )
 
         print("[OK] 采样方案生成成功！")

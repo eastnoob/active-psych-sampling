@@ -1,0 +1,464 @@
+
+================================================================================
+Analyzing: run_eur_residual.cpython-314.pyc
+================================================================================
+
+=== <module> ===
+Filename: d:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\run_eur_residual.py
+Line: 1
+Arguments: 0
+Local vars: 3
+Variables: i, w, j
+Names: __doc__, sys, io, argparse, pathlib, Path, json, datetime, stdout, encoding, TextIOWrapper, buffer, __file__, parent, PROJECT_ROOT, local_modules_path, path, insert, str, loguru, logger, remove, add, stderr, info, gpytorch, torch, numpy, np, aepsych.config
+... and 116 more
+Constants (168 total):
+  [0] str: '\nEUR采集函数验证实验 - 简化版本\n使用模块化设计，主脚本仅负责流程编排\n调用modules目录中的专用模块函数\n'
+  [2] tuple: ('Path',)
+  [3] tuple: ('datetime',)
+  [4] str: 'utf-8'
+  [5] tuple: ('encoding',)
+  [6] str: 'modules'
+  [7] str: 'temp_aepsych'
+  [8] str: 'extensions'
+  [9] str: 'dynamic_eur_acquisition'
+
+--- Nested functions/classes ---
+  === ConfigurableGaussianLikelihood ===
+  Filename: d:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\run_eur_residual.py
+  Line: 71
+  Arguments: 0
+  Local vars: 0
+  Names: __name__, __module__, __qualname__, __firstlineno__, __init__, __static_attributes__, __classdictcell__, __classcell__
+  Constants (4 total):
+    [0] str: 'ConfigurableGaussianLikelihood'
+    [1] <code object __init__>
+    [2] tuple: ()
+    [3] tuple: (2.0, 1.228, 0.814)
+
+  --- Nested functions/classes ---
+    === __init__ ===
+    Filename: d:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\run_eur_residual.py
+    Line: 74
+    Arguments: 4
+    Local vars: 10
+    Variables: self, noise_prior_concentration, noise_prior_rate, noise_init, kwargs, c_val, r_val, n_val, noise_prior, noise_constraint
+    Names: float, gpytorch, priors, GammaPrior, torch, tensor, constraints, GreaterThan, super, __init__
+    Constants (8 total):
+      [0] tuple: ('dtype',)
+      [1] tuple: ('concentration', 'rate')
+      [2] float: 0.0001
+      [3] tuple: ('initial_value',)
+      [4] str: 'noise_prior'
+      [5] str: 'noise_constraint'
+      [7] tuple: ()
+
+
+================================================================================
+Disassembly of <module> (first 100 instructions):
+================================================================================
+
+   0            RESUME                   0
+
+   3            LOAD_CONST               0 ('\nEUR采集函数验证实验 - 简化版本\n使用模块化设计，主脚本仅负责流程编排\n调用modules目录中的专用模块函数\n')
+                STORE_NAME               0 (__doc__)
+
+   9            LOAD_SMALL_INT           0
+                LOAD_CONST               1 (None)
+                IMPORT_NAME              1 (sys)
+                STORE_NAME               1 (sys)
+
+  10            LOAD_SMALL_INT           0
+                LOAD_CONST               1 (None)
+                IMPORT_NAME              2 (io)
+                STORE_NAME               2 (io)
+
+  11            LOAD_SMALL_INT           0
+                LOAD_CONST               1 (None)
+                IMPORT_NAME              3 (argparse)
+                STORE_NAME               3 (argparse)
+
+  12            LOAD_SMALL_INT           0
+                LOAD_CONST               2 (('Path',))
+                IMPORT_NAME              4 (pathlib)
+                IMPORT_FROM              5 (Path)
+                STORE_NAME               5 (Path)
+                POP_TOP
+
+  13            LOAD_SMALL_INT           0
+                LOAD_CONST               1 (None)
+                IMPORT_NAME              6 (json)
+                STORE_NAME               6 (json)
+
+  14            LOAD_SMALL_INT           0
+                LOAD_CONST               3 (('datetime',))
+                IMPORT_NAME              7 (datetime)
+                IMPORT_FROM              7 (datetime)
+                STORE_NAME               7 (datetime)
+                POP_TOP
+
+  17            LOAD_NAME                1 (sys)
+                LOAD_ATTR               16 (stdout)
+                LOAD_ATTR               18 (encoding)
+                LOAD_CONST               4 ('utf-8')
+                COMPARE_OP             119 (bool(!=))
+                POP_JUMP_IF_FALSE       46 (to L1)
+                NOT_TAKEN
+
+  18            LOAD_NAME                2 (io)
+                LOAD_ATTR               20 (TextIOWrapper)
+                PUSH_NULL
+                LOAD_NAME                1 (sys)
+                LOAD_ATTR               16 (stdout)
+                LOAD_ATTR               22 (buffer)
+                LOAD_CONST               4 ('utf-8')
+                LOAD_CONST               5 (('encoding',))
+                CALL_KW                  2
+                LOAD_NAME                1 (sys)
+                STORE_ATTR               8 (stdout)
+
+  21    L1:     LOAD_NAME                5 (Path)
+                PUSH_NULL
+                LOAD_NAME               12 (__file__)
+                CALL                     1
+                LOAD_ATTR               26 (parent)
+                LOAD_ATTR               26 (parent)
+                LOAD_ATTR               26 (parent)
+                LOAD_ATTR               26 (parent)
+                LOAD_ATTR               26 (parent)
+                LOAD_ATTR               26 (parent)
+                STORE_NAME              14 (PROJECT_ROOT)
+
+  23            LOAD_NAME                5 (Path)
+                PUSH_NULL
+                LOAD_NAME               12 (__file__)
+                CALL                     1
+                LOAD_ATTR               26 (parent)
+                LOAD_CONST               6 ('modules')
+                BINARY_OP               11 (/)
+                STORE_NAME              15 (local_modules_path)
+
+  24            LOAD_NAME                1 (sys)
+                LOAD_ATTR               32 (path)
+                LOAD_ATTR               35 (insert + NULL|self)
+                LOAD_SMALL_INT           0
+                LOAD_NAME               18 (str)
+                PUSH_NULL
+                LOAD_NAME               15 (local_modules_path)
+                CALL                     1
+                CALL                     2
+                POP_TOP
+
+  25            LOAD_NAME                1 (sys)
+                LOAD_ATTR               32 (path)
+                LOAD_ATTR               35 (insert + NULL|self)
+                LOAD_SMALL_INT           0
+                LOAD_NAME               18 (str)
+                PUSH_NULL
+                LOAD_NAME               14 (PROJECT_ROOT)
+                CALL                     1
+                CALL                     2
+
+... and 1736 more lines of bytecode
+
+================================================================================
+Analyzing: run_eur_residual.cpython-314.pyc
+================================================================================
+
+=== <module> ===
+Filename: d:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\run_eur_residual.py
+Line: 1
+Arguments: 0
+Local vars: 3
+Variables: i, w, j
+Names: __doc__, sys, io, argparse, pathlib, Path, json, datetime, stdout, encoding, TextIOWrapper, buffer, __file__, parent, PROJECT_ROOT, local_modules_path, path, insert, str, loguru, logger, remove, add, stderr, info, gpytorch, torch, numpy, np, aepsych.config
+... and 116 more
+Constants (168 total):
+  [0] str: '\nEUR采集函数验证实验 - 简化版本\n使用模块化设计，主脚本仅负责流程编排\n调用modules目录中的专用模块函数\n'
+  [2] tuple: ('Path',)
+  [3] tuple: ('datetime',)
+  [4] str: 'utf-8'
+  [5] tuple: ('encoding',)
+  [6] str: 'modules'
+  [7] str: 'temp_aepsych'
+  [8] str: 'extensions'
+  [9] str: 'dynamic_eur_acquisition'
+
+--- Nested functions/classes ---
+  === ConfigurableGaussianLikelihood ===
+  Filename: d:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\run_eur_residual.py
+  Line: 71
+  Arguments: 0
+  Local vars: 0
+  Names: __name__, __module__, __qualname__, __firstlineno__, __init__, __static_attributes__, __classdictcell__, __classcell__
+  Constants (4 total):
+    [0] str: 'ConfigurableGaussianLikelihood'
+    [1] <code object __init__>
+    [2] tuple: ()
+    [3] tuple: (2.0, 1.228, 0.814)
+
+  --- Nested functions/classes ---
+    === __init__ ===
+    Filename: d:\ENVS\active-psych-sampling\tests\is_EUR_work\00_plans\251206\scripts\run_eur_residual.py
+    Line: 74
+    Arguments: 4
+    Local vars: 10
+    Variables: self, noise_prior_concentration, noise_prior_rate, noise_init, kwargs, c_val, r_val, n_val, noise_prior, noise_constraint
+    Names: float, gpytorch, priors, GammaPrior, torch, tensor, constraints, GreaterThan, super, __init__
+    Constants (8 total):
+      [0] tuple: ('dtype',)
+      [1] tuple: ('concentration', 'rate')
+      [2] float: 0.0001
+      [3] tuple: ('initial_value',)
+      [4] str: 'noise_prior'
+      [5] str: 'noise_constraint'
+      [7] tuple: ()
+
+
+================================================================================
+Disassembly of <module> (first 100 instructions):
+================================================================================
+
+   0            RESUME                   0
+
+   3            LOAD_CONST               0 ('\nEUR采集函数验证实验 - 简化版本\n使用模块化设计，主脚本仅负责流程编排\n调用modules目录中的专用模块函数\n')
+                STORE_NAME               0 (__doc__)
+
+   9            LOAD_SMALL_INT           0
+                LOAD_CONST               1 (None)
+                IMPORT_NAME              1 (sys)
+                STORE_NAME               1 (sys)
+
+  10            LOAD_SMALL_INT           0
+                LOAD_CONST               1 (None)
+                IMPORT_NAME              2 (io)
+                STORE_NAME               2 (io)
+
+  11            LOAD_SMALL_INT           0
+                LOAD_CONST               1 (None)
+                IMPORT_NAME              3 (argparse)
+                STORE_NAME               3 (argparse)
+
+  12            LOAD_SMALL_INT           0
+                LOAD_CONST               2 (('Path',))
+                IMPORT_NAME              4 (pathlib)
+                IMPORT_FROM              5 (Path)
+                STORE_NAME               5 (Path)
+                POP_TOP
+
+  13            LOAD_SMALL_INT           0
+                LOAD_CONST               1 (None)
+                IMPORT_NAME              6 (json)
+                STORE_NAME               6 (json)
+
+  14            LOAD_SMALL_INT           0
+                LOAD_CONST               3 (('datetime',))
+                IMPORT_NAME              7 (datetime)
+                IMPORT_FROM              7 (datetime)
+                STORE_NAME               7 (datetime)
+                POP_TOP
+
+  17            LOAD_NAME                1 (sys)
+                LOAD_ATTR               16 (stdout)
+                LOAD_ATTR               18 (encoding)
+                LOAD_CONST               4 ('utf-8')
+                COMPARE_OP             119 (bool(!=))
+                POP_JUMP_IF_FALSE       46 (to L1)
+                NOT_TAKEN
+
+  18            LOAD_NAME                2 (io)
+                LOAD_ATTR               20 (TextIOWrapper)
+                PUSH_NULL
+                LOAD_NAME                1 (sys)
+                LOAD_ATTR               16 (stdout)
+                LOAD_ATTR               22 (buffer)
+                LOAD_CONST               4 ('utf-8')
+                LOAD_CONST               5 (('encoding',))
+                CALL_KW                  2
+                LOAD_NAME                1 (sys)
+                STORE_ATTR               8 (stdout)
+
+  21    L1:     LOAD_NAME                5 (Path)
+                PUSH_NULL
+                LOAD_NAME               12 (__file__)
+                CALL                     1
+                LOAD_ATTR               26 (parent)
+                LOAD_ATTR               26 (parent)
+                LOAD_ATTR               26 (parent)
+                LOAD_ATTR               26 (parent)
+                LOAD_ATTR               26 (parent)
+                LOAD_ATTR               26 (parent)
+                STORE_NAME              14 (PROJECT_ROOT)
+
+  23            LOAD_NAME                5 (Path)
+                PUSH_NULL
+                LOAD_NAME               12 (__file__)
+                CALL                     1
+                LOAD_ATTR               26 (parent)
+                LOAD_CONST               6 ('modules')
+                BINARY_OP               11 (/)
+                STORE_NAME              15 (local_modules_path)
+
+  24            LOAD_NAME                1 (sys)
+                LOAD_ATTR               32 (path)
+                LOAD_ATTR               35 (insert + NULL|self)
+                LOAD_SMALL_INT           0
+                LOAD_NAME               18 (str)
+                PUSH_NULL
+                LOAD_NAME               15 (local_modules_path)
+                CALL                     1
+                CALL                     2
+                POP_TOP
+
+  25            LOAD_NAME                1 (sys)
+                LOAD_ATTR               32 (path)
+                LOAD_ATTR               35 (insert + NULL|self)
+                LOAD_SMALL_INT           0
+                LOAD_NAME               18 (str)
+                PUSH_NULL
+                LOAD_NAME               14 (PROJECT_ROOT)
+                CALL                     1
+                CALL                     2
+
+... and 1736 more lines of bytecode
+
+================================================================================
+Analyzing: run_sobol_test.cpython-314-pytest-9.0.2.pyc
+================================================================================
+
+=== <module> ===
+Filename: D:\ENVS\active-psych-sampling\tests\is_EUR_work\archive\scripts\run_sobol_test.py
+Line: 1
+Arguments: 0
+Local vars: 4
+Variables: i, k, v, x
+Names: __doc__, builtins, @py_builtins, _pytest.assertion.rewrite, assertion, rewrite, @pytest_ar, sys, io, pathlib, Path, json, numpy, np, pandas, pd, datetime, scipy.spatial.distance, cdist, stdout, encoding, TextIOWrapper, buffer, __file__, parent, PROJECT_ROOT, path, insert, str, aepsych.config
+... and 122 more
+Constants (143 total):
+  [0] str: '\nEUR采集函数Sobol预热测试\n简化版本：10次Sobol + 50次EUR\n'
+  [2] tuple: ('Path',)
+  [3] tuple: ('datetime',)
+  [4] tuple: ('cdist',)
+  [5] str: 'utf-8'
+  [6] tuple: ('encoding',)
+  [7] str: 'temp_aepsych'
+  [8] str: 'extensions'
+  [9] str: 'dynamic_eur_acquisition'
+
+--- Nested functions/classes ---
+  === extract_value ===
+  Filename: D:\ENVS\active-psych-sampling\tests\is_EUR_work\archive\scripts\run_sobol_test.py
+  Line: 173
+  Arguments: 1
+  Local vars: 1
+  Variables: val
+  Names: isinstance, list, float
+  Constants (1 total):
+    [0] int: 0
+
+
+================================================================================
+Disassembly of <module> (first 100 instructions):
+================================================================================
+
+   0             RESUME                   0
+
+   3             LOAD_CONST               0 ('\nEUR采集函数Sobol预热测试\n简化版本：10次Sobol + 50次EUR\n')
+                 STORE_NAME               0 (__doc__)
+
+   8             LOAD_SMALL_INT           0
+                 LOAD_CONST               1 (None)
+                 IMPORT_NAME              1 (builtins)
+                 STORE_NAME               2 (@py_builtins)
+                 LOAD_SMALL_INT           0
+                 LOAD_CONST               1 (None)
+                 IMPORT_NAME              3 (_pytest.assertion.rewrite)
+                 IMPORT_FROM              4 (assertion)
+                 SWAP                     2
+                 POP_TOP
+                 IMPORT_FROM              5 (rewrite)
+                 STORE_NAME               6 (@pytest_ar)
+                 POP_TOP
+                 LOAD_SMALL_INT           0
+                 LOAD_CONST               1 (None)
+                 IMPORT_NAME              7 (sys)
+                 STORE_NAME               7 (sys)
+
+   9             LOAD_SMALL_INT           0
+                 LOAD_CONST               1 (None)
+                 IMPORT_NAME              8 (io)
+                 STORE_NAME               8 (io)
+
+  10             LOAD_SMALL_INT           0
+                 LOAD_CONST               2 (('Path',))
+                 IMPORT_NAME              9 (pathlib)
+                 IMPORT_FROM             10 (Path)
+                 STORE_NAME              10 (Path)
+                 POP_TOP
+
+  11             LOAD_SMALL_INT           0
+                 LOAD_CONST               1 (None)
+                 IMPORT_NAME             11 (json)
+                 STORE_NAME              11 (json)
+
+  12             LOAD_SMALL_INT           0
+                 LOAD_CONST               1 (None)
+                 IMPORT_NAME             12 (numpy)
+                 STORE_NAME              13 (np)
+
+  13             LOAD_SMALL_INT           0
+                 LOAD_CONST               1 (None)
+                 IMPORT_NAME             14 (pandas)
+                 STORE_NAME              15 (pd)
+
+  14             LOAD_SMALL_INT           0
+                 LOAD_CONST               3 (('datetime',))
+                 IMPORT_NAME             16 (datetime)
+                 IMPORT_FROM             16 (datetime)
+                 STORE_NAME              16 (datetime)
+                 POP_TOP
+
+  15             LOAD_SMALL_INT           0
+                 LOAD_CONST               4 (('cdist',))
+                 IMPORT_NAME             17 (scipy.spatial.distance)
+                 IMPORT_FROM             18 (cdist)
+                 STORE_NAME              18 (cdist)
+                 POP_TOP
+
+  18             LOAD_NAME                7 (sys)
+                 LOAD_ATTR               38 (stdout)
+                 LOAD_ATTR               40 (encoding)
+                 LOAD_CONST               5 ('utf-8')
+                 COMPARE_OP             119 (bool(!=))
+                 POP_JUMP_IF_FALSE       46 (to L1)
+                 NOT_TAKEN
+
+  19             LOAD_NAME                8 (io)
+                 LOAD_ATTR               42 (TextIOWrapper)
+                 PUSH_NULL
+                 LOAD_NAME                7 (sys)
+                 LOAD_ATTR               38 (stdout)
+                 LOAD_ATTR               44 (buffer)
+                 LOAD_CONST               5 ('utf-8')
+                 LOAD_CONST               6 (('encoding',))
+                 CALL_KW                  2
+                 LOAD_NAME                7 (sys)
+                 STORE_ATTR              19 (stdout)
+
+  22     L1:     LOAD_NAME               10 (Path)
+                 PUSH_NULL
+                 LOAD_NAME               23 (__file__)
+                 CALL                     1
+                 LOAD_ATTR               48 (parent)
+                 LOAD_ATTR               48 (parent)
+                 LOAD_ATTR               48 (parent)
+                 STORE_NAME              25 (PROJECT_ROOT)
+
+  23             LOAD_NAME                7 (sys)
+                 LOAD_ATTR               52 (path)
+                 LOAD_ATTR               55 (insert + NULL|self)
+                 LOAD_SMALL_INT           0
+                 LOAD_NAME               28 (str)
+                 PUSH_NULL
+                 LOAD_NAME               25 (PROJECT_ROOT)
+
+... and 1959 more lines of bytecode

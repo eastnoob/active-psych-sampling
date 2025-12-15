@@ -43,9 +43,17 @@ from typing import Dict, Any, Tuple, List, Literal, Union
 
 import numpy as np
 import pandas as pd
+import os
+
+# Windows torch 环境修复
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'  # 修复 OpenMP 库冲突
+os.environ['PYTORCH_ENABLE_MPS_FALLBACK'] = '1'  # MPS fallback
+os.environ['PYTORCH_NO_CUDA_MEMORY_CACHING'] = '1'
 
 try:
     import torch
+    torch.multiprocessing.set_sharing_strategy('file_system')
+
     from torch import Tensor
     import gpytorch
     from botorch.models import SingleTaskGP

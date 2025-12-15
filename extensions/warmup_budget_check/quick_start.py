@@ -21,6 +21,10 @@ import os
 # 设置编码 - Windows 兼容性修复
 os.environ["PYTHONIOENCODING"] = "utf-8"
 
+# 修复 PyTorch + MKL 的 OpenMP 冲突（Windows 常见问题）
+# 这允许多个 OpenMP 运行时共存（在导入任何科学计算库之前设置）
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+
 # 处理 Windows PowerShell 的编码问题
 if sys.platform == "win32":
     # 强制使用 UTF-8 编码，避免 GBK 乱码
@@ -75,7 +79,7 @@ except ImportError:
 # "all"        - 步骤1 -> 步骤1.5(模拟) -> 步骤2 -> 步骤3
 # "chain12"    - 使用流程管理器运行步骤1->2（推荐）
 # "chain123"   - 使用流程管理器运行步骤1->2->3（推荐）
-MODE = "step1"  # 运行 Step1 -> Step1.5(模拟) -> Step2 -> Step3
+MODE = "all"  # 运行 Step1 -> Step1.5(模拟) -> Step2 -> Step3
 
 # ----------------------------------------------------------------------------
 # ALL 模式专用配置：统一控制所有步骤的参数（推荐使用）
@@ -97,7 +101,7 @@ ALL_CONFIG = {
     "n_subjects": 5,  # Phase 1 被试数量
     "trials_per_subject": 20,  # Phase 1 每个被试的测试次数
     "skip_interaction": False,  # 是否跳过交互效应探索
-    "auto_confirm": False,  # 是否自动确认（True=不询问）
+    "auto_confirm": True,  # 是否自动确认（True=不询问）
     # ==================== Core-2b 交互对探索模式 ====================
     "interaction_mode": "hybrid",  # "free" / "specified_only" / "hybrid"
     # "free": 随机探索所有交互对（当前行为）
@@ -433,6 +437,17 @@ def run_step1():
             config = _dict_to_step1_config(STEP1_CONFIG)
             result = api_run_step1(config)
 
+            # 检查执行是否成功
+            if not result["success"]:
+                # 如果是用户取消操作，打印取消信息并退出
+                if any("[取消]" in str(err) for err in result.get("errors", [])):
+                    print("[取消] 已退出")
+                else:
+                    print("[错误] 执行失败：")
+                    for error in result.get("errors", []):
+                        print(f"  {error}")
+                sys.exit(0)
+
             print("[OK] 采样方案生成成功！")
             print(f"  文件数: {len(result['files'])}")
             print(f"  保存位置: {result['output_dir']}/")
@@ -450,6 +465,9 @@ def run_step1():
 
         except Exception as e:
             print(f"[警告] 新 API 运行失败，回退到传统实现: {e}")
+            import traceback
+
+            traceback.print_exc()
 
     # 传统实现（向后兼容）
     from core.warmup_sampler import WarmupSampler
@@ -703,6 +721,26 @@ def run_step3():
     print("步骤3：Base GP 训练与设计空间扫描")
     print("=" * 80)
     print()
+
+    # 预先检查 PyTorch 是否可用
+    try:
+        import torch
+        print(f"[检测] PyTorch {torch.__version__} 可用")
+    except Exception as e:
+        print("[错误] PyTorch 无法加载，Step3 需要 PyTorch 支持")
+        print()
+        print("错误详情:", str(e))
+        print()
+        print("解决方案:")
+        print("1. 安装 Microsoft Visual C++ Redistributable 2015-2022 (x64)")
+        print("   下载: https://aka.ms/vs/17/release/vc_redist.x64.exe")
+        print()
+        print("2. 或者使用其他模式跳过 Step3:")
+        print("   - MODE = 'step1': 只生成采样方案")
+        print("   - MODE = 'step2': 分析数据生成 Phase2 参数（不需要 PyTorch）")
+        print()
+        print("[跳过] Step3 已跳过，Step1 和 Step2 的结果仍然可用")
+        return
 
     # 使用新的 API（如果可用）
     if API_AVAILABLE:

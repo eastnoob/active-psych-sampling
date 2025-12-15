@@ -9,11 +9,17 @@
 """
 
 import sys
+import os
 import time
 import traceback
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Union, Callable
 from dataclasses import dataclass, asdict
+
+# 设置环境变量 - 必须在导入任何torch相关库之前
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
+os.environ['PYTORCH_ENABLE_MPS_FALLBACK'] = '1'
+os.environ['PYTORCH_NO_CUDA_MEMORY_CACHING'] = '1'
 
 # 导入内部模块
 try:
@@ -175,6 +181,18 @@ def run_step1(
         if strict_mode and adequacy in [ADEQUACY_INSUFFICIENT, ADEQUACY_SEVERE]:
             raise ValueError(f"预算评估为【{adequacy}】，在严格模式下不允许继续")
 
+        # 用户确认（如果需要）
+        if not config.auto_confirm:
+            if adequacy in [ADEQUACY_INSUFFICIENT, ADEQUACY_SEVERE]:
+                print(f"[!] 预算评估为【{adequacy}】，不建议继续")
+                confirm = input("是否仍要生成采样方案？(y/N): ").strip().lower()
+                if confirm != "y":
+                    raise ValueError("[取消] 用户取消操作")
+            else:
+                confirm = input("是否生成采样方案？(Y/n): ").strip().lower()
+                if confirm == "n":
+                    raise ValueError("[取消] 用户取消操作")
+
         # 生成采样文件
         exported_files = sampler.generate_samples(
             budget=budget,
@@ -194,9 +212,19 @@ def run_step1(
     # 执行并返回结果
     result = _safe_call(_run_step1_internal)
 
-    # 如果执行失败，直接返回
+    # 如果执行失败，返回标准格式的错误结果
     if not result["success"]:
-        return result
+        return {
+            "success": False,
+            "adequacy": None,
+            "budget": None,
+            "files": [],
+            "output_dir": None,
+            "warnings": result.get("warnings", []),
+            "errors": result.get("errors", []),
+            "execution_time": result.get("execution_time", 0.0),
+            "timestamp": result.get("timestamp", time.strftime("%Y-%m-%d %H:%M:%S")),
+        }
 
     # 处理成功的情况
     internal_result = result["result"]

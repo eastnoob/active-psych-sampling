@@ -55,10 +55,11 @@ try:
 
     API_AVAILABLE = True
 except ImportError:
-    API_AVAILABLE = False
-    print("[警告] 新的 API 模块不可用，将使用传统实现")
+    import traceback
 
-API_AVAILABLE = False  # 强制使用传统实现以显示确认信息
+    print("[错误] 新的 API 模块不可用 — 该脚本要求新的 API 可用以保持交互式设计。")
+    traceback.print_exc()
+    sys.exit(1)
 
 # ============================================================================
 # 配置参数 - 请根据需要修改

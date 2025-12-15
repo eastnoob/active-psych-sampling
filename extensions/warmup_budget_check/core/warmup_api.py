@@ -19,13 +19,15 @@ from dataclasses import dataclass, asdict
 try:
     from warmup_sampler import WarmupSampler
     from analyze_phase1 import Phase1DataAnalyzer
-    from phase1_step3_base_gp import process_step3
+    # LAZY IMPORT: phase1_step3_base_gp 需要 torch，只在使用时导入
+    # from phase1_step3_base_gp import process_step3
 except ImportError:
     # 如果直接运行，添加当前目录到路径
     sys.path.append(str(Path(__file__).parent))
     from warmup_sampler import WarmupSampler
     from analyze_phase1 import Phase1DataAnalyzer
-    from phase1_step3_base_gp import process_step3
+    # LAZY IMPORT: phase1_step3_base_gp 需要 torch，只在使用时导入
+    # from phase1_step3_base_gp import process_step3
 
 from config_models import Step1Config, Step2Config, Step3Config, WarmupPipelineConfig
 
@@ -370,6 +372,13 @@ def run_step3(
 
     def _run_step3_internal():
         """内部执行函数"""
+        # LAZY IMPORT: 只在真正执行 step3 时才导入 torch 依赖
+        try:
+            from phase1_step3_base_gp import process_step3
+        except ImportError:
+            sys.path.append(str(Path(__file__).parent))
+            from phase1_step3_base_gp import process_step3
+
         result = process_step3(
             data_csv_path=config.data_csv_path,
             design_space_csv=config.design_space_csv,

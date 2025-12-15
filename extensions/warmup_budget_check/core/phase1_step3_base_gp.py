@@ -13,14 +13,25 @@ import json
 import math
 import re
 import sys
+import os
 from pathlib import Path
 from typing import Dict, Any, Tuple, List
 
 import numpy as np
 import pandas as pd
 
+# Windows torch 环境修复
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'  # 修复 OpenMP 库冲突
+os.environ['PYTORCH_ENABLE_MPS_FALLBACK'] = '1'  # MPS fallback
+
+# 尝试禁用 torch 的 shared memory（绕过 shm.dll 问题）
+os.environ['PYTORCH_NO_CUDA_MEMORY_CACHING'] = '1'
+
 try:
+    # 设置 torch 使用 CPU 并禁用 multiprocessing
     import torch
+    torch.multiprocessing.set_sharing_strategy('file_system')
+
     from torch import Tensor
     import gpytorch
     from botorch.models import SingleTaskGP

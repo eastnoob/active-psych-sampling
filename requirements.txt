@@ -1,1 +1,1 @@
-aepsych @ git+https://github.com/facebookresearch/aepsych@8f68733
+git+https://github.com/eastnoob/aepsych.git

@@ -718,16 +718,20 @@ class WarmupSampler:
 
             protected_configs = list(set(protected_configs))  # 去重
 
-            # Step 3: 剩余预算用于自由探索
+            # Step 3: 剩余预算用于自由探索（覆盖度优化）
             remaining_budget = n_configs - len(protected_configs)
             remaining_available = list(set(available) - set(protected_configs))
 
             free_exploration = []
             if remaining_budget > 0 and remaining_available:
                 n_free = min(remaining_budget, len(remaining_available))
-                free_exploration = np.random.choice(
-                    remaining_available, size=n_free, replace=False
-                ).tolist()
+                # 使用综合覆盖度优化采样（单因子 + 因子对）
+                # 目标：提升对未保护交互对的探索能力
+                free_exploration = self._select_covering_configs(
+                    n_configs=n_free,
+                    used_indices=set(protected_configs) | used_indices,
+                    target_coverage=0.85
+                )
 
             # 合并
             result = protected_configs + free_exploration
@@ -933,6 +937,97 @@ class WarmupSampler:
 
         # 平均覆盖度
         return total_coverage / len(df_sub.columns) if len(df_sub.columns) > 0 else 0.0
+
+    def _compute_pairwise_coverage(self, config_indices: List[int]) -> float:
+        """
+        计算配置子集的因子对值组合覆盖度
+
+        Args:
+            config_indices: 配置索引列表
+
+        Returns:
+            覆盖度分数 (0-1之间，越高越好)
+        """
+        if not config_indices:
+            return 0.0
+
+        df_sub = self.design_df.iloc[config_indices]
+        n_factors = len(self.design_df.columns)
+        total_coverage = 0.0
+        n_pairs = 0
+
+        for i in range(n_factors):
+            for j in range(i + 1, n_factors):
+                col_i = self.design_df.columns[i]
+                col_j = self.design_df.columns[j]
+
+                # 全部可能的值组合
+                all_combinations = set(
+                    self.design_df[[col_i, col_j]].itertuples(index=False, name=None)
+                )
+                # 实际出现的值组合
+                actual_combinations = set(
+                    df_sub[[col_i, col_j]].itertuples(index=False, name=None)
+                )
+
+                if all_combinations:
+                    total_coverage += len(actual_combinations) / len(all_combinations)
+                    n_pairs += 1
+
+        return total_coverage / n_pairs if n_pairs > 0 else 0.0
+
+    def _select_covering_configs(
+        self, n_configs: int, used_indices: set, target_coverage: float = 0.85
+    ) -> List[int]:
+        """
+        覆盖度优化采样：同时优化单因子水平和因子对值组合的覆盖度
+
+        使用贪心算法，每次选择能最大化综合覆盖度的配置
+
+        Args:
+            n_configs: 需要选择的配置数
+            used_indices: 已使用的配置索引集合
+            target_coverage: 目标覆盖度（0-1之间）
+
+        Returns:
+            选中的配置索引列表
+        """
+        available = list(set(self.design_df.index) - used_indices)
+
+        if len(available) <= n_configs:
+            return available
+
+        # 贪心策略：每次选择能最大化综合覆盖度的配置
+        selected = []
+        remaining = available.copy()
+
+        for _ in range(n_configs):
+            if not remaining:
+                break
+
+            best_idx = None
+            best_score = -1
+
+            # 评估每个候选配置的覆盖度增益
+            for candidate in remaining:
+                test_subset = selected + [candidate]
+
+                # 综合评分：单因子覆盖度 + 因子对覆盖度
+                factor_cov = self._compute_factor_coverage(test_subset)
+                pairwise_cov = self._compute_pairwise_coverage(test_subset)
+
+                # 加权综合评分（因子对覆盖度权重更高）
+                score = 0.3 * factor_cov + 0.7 * pairwise_cov
+
+                if score > best_score:
+                    best_score = score
+                    best_idx = candidate
+
+            if best_idx is not None:
+                selected.append(best_idx)
+                remaining.remove(best_idx)
+
+        return selected
 
     def _generate_five_step_samples(
         self,

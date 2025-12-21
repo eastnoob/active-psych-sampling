@@ -48,6 +48,10 @@ class ClusterGenerator:
         likert_sensitivity: float = 2.0,
         ensure_normality: bool = True,
         max_retries: int = 20,
+        # Normality check parameters
+        normality_min_coverage: int = 3,
+        normality_max_single_ratio: float = 0.6,
+        normality_mean_range: tuple = (2.0, 4.0),
         seed: int = 42
     ):
         """
@@ -82,6 +86,10 @@ class ClusterGenerator:
         self.likert_sensitivity = likert_sensitivity
         self.ensure_normality = ensure_normality
         self.max_retries = max_retries
+        # Normality params
+        self.normality_min_coverage = int(normality_min_coverage)
+        self.normality_max_single_ratio = float(normality_max_single_ratio)
+        self.normality_mean_range = tuple(normality_mean_range)
         self.seed = seed
 
         # 初始化随机数生成器
@@ -138,8 +146,10 @@ class ClusterGenerator:
             subjects.append(subject)
             subject_specs.append(spec)
 
-            # 保存被试参数
-            subject.save(output_path / f"subject_{subject_id}_spec.json")
+            # 保存被试spec（包含response_statistics & validation）
+            with open(output_path / f"subject_{subject_id}_spec.json", 'w', encoding='utf-8') as f:
+                json.dump(spec, f, indent=2, ensure_ascii=False)
+
             print(f"  [OK] Subject {subject_id} generated")
 
         # 4. 生成响应数据并保存CSV
@@ -190,6 +200,10 @@ class ClusterGenerator:
         # 设置被试专用随机种子
         np.random.seed(subject_seed)
 
+        attempt_validations = []
+        used_population_weights = False
+        fallback_reason = None
+
         for attempt in range(self.max_retries):
             # 个体权重 = 群体权重 + 个体偏差
             individual_deviation = np.random.normal(
@@ -213,9 +227,17 @@ class ClusterGenerator:
 
             # 正态性检查
             if not self.ensure_normality:
+                attempt_validations.append({'passed': True, 'reason': 'no_check'})
                 break
 
-            validation = check_normality(responses)
+            validation = check_normality(
+                responses,
+                min_coverage=self.normality_min_coverage,
+                max_single_ratio=self.normality_max_single_ratio,
+                mean_range=self.normality_mean_range,
+            )
+
+            attempt_validations.append({k: validation[k] for k in ('passed','reason','coverage','max_ratio','mean')})
 
             if validation["passed"]:
                 break
@@ -224,6 +246,10 @@ class ClusterGenerator:
                 print(f"  Warning: Subject {subject_id} failed normality check after {self.max_retries} retries")
                 print(f"           Reason: {validation['reason']}")
                 print(f"           Using population weights (no deviation)")
+
+                # 标识已回退
+                used_population_weights = True
+                fallback_reason = validation['reason']
 
                 # 使用群体权重（无偏差）作为保底
                 subject = LinearSubject(
@@ -239,9 +265,25 @@ class ClusterGenerator:
 
         # 生成spec
         stats = get_distribution_stats(responses)
+
+        # 对最终响应再做一次验证以记录最终状态（兼做安全检查）
+        final_validation = check_normality(
+            responses,
+            min_coverage=self.normality_min_coverage,
+            max_single_ratio=self.normality_max_single_ratio,
+            mean_range=self.normality_mean_range,
+        )
+
         spec = subject.to_dict()
         spec["subject_id"] = f"subject_{subject_id}"
         spec["response_statistics"] = stats
+        spec["validation"] = final_validation
+
+        # 记录尝试详情与是否最终回退到群体权重
+        spec["validation_attempts"] = attempt_validations
+        spec["used_population_weights"] = bool(used_population_weights)
+        if used_population_weights:
+            spec["fallback_reason"] = fallback_reason
 
         return subject, spec
 

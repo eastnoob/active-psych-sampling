@@ -13,13 +13,14 @@ from .oracle import (
 )
 
 # 评估模块
-from .evaluation_v2 import (
+from .evaluation_effect_recovery import (
     evaluate_effect_recovery_v2,
+    evaluate_variance_components,
 )
-from .evaluation_v3 import (
+from .evaluation_effect_capture import (
     evaluate_effect_capture,
 )
-from .evaluation_v4 import (
+from .evaluation_model_discovery import (
     evaluate_effect_capture_v4,
 )
 
@@ -72,6 +73,7 @@ __all__ = [
     "save_oracle_spec",
     # Evaluation
     "evaluate_effect_recovery_v2",
+    "evaluate_variance_components",
     "evaluate_effect_capture",
     "evaluate_effect_capture_v4",
     # Sampling

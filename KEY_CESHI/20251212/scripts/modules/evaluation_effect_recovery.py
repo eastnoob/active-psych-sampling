@@ -539,3 +539,183 @@ def evaluate_effect_recovery_from_samples(
         print(f"  预测R²:              {r2:.4f}")
         print(f"  线性拟合R²:          {lr_r2:.4f}")
         print(f"  样本数:              {res['model_fit']['n_train']}")
+
+
+def evaluate_variance_components(
+    X_train: np.ndarray,
+    y_train: np.ndarray,
+    subject_ids: np.ndarray,
+    true_variance_components: Optional[Dict[str, float]] = None,
+    include_predictors: bool = True,
+) -> Dict:
+    """
+    评估混合效应模型的方差成分估计能力 (用于LMM分析)
+
+    核心指标:
+    1. ICC (Intraclass Correlation Coefficient): σ²_between / (σ²_between + σ²_within)
+    2. Between-subject variance (σ²_between): 被试间差异
+    3. Within-subject variance (σ²_within): 被试内测量误差
+    4. Variance component estimation accuracy (如果提供真实值)
+
+    这对于评估采样策略在群体推断中的表现至关重要,因为:
+    - 采样不均衡会导致ICC估计偏差
+    - 采样点过少会导致方差成分估计不稳定
+    - EUR等主动采样可能集中在特定区域,影响群体代表性
+
+    Args:
+        X_train: 采样点 (n, d) - 可包含重复被试的多次测量
+        y_train: 观测值 (n,) - 对应的因变量
+        subject_ids: 被试ID (n,) - 标识每个观测来自哪个被试
+        true_variance_components: 真实的方差成分 {"sigma2_between": float, "sigma2_within": float}
+        include_predictors: 是否在模型中包含预测变量(默认True,用于conditional ICC)
+
+    Returns:
+        dict: 包含ICC、方差成分、估计准确性等指标
+            {
+                "icc": float,  # Intraclass correlation
+                "sigma2_between": float,  # Between-subject variance
+                "sigma2_within": float,  # Within-subject variance
+                "n_subjects": int,  # 被试数量
+                "n_obs_per_subject": dict,  # 每个被试的观测数
+                "mean_obs_per_subject": float,  # 平均每被试观测数
+                "estimation_accuracy": dict,  # 如果提供真实值
+                "model_type": str,  # "null_model" or "conditional_model"
+            }
+
+    Example:
+        >>> # 模拟3个被试,每人5次观测
+        >>> X = np.random.randn(15, 6)
+        >>> subject_ids = np.repeat([0, 1, 2], 5)
+        >>> # 被试间差异 + 被试内噪声
+        >>> subject_effects = np.array([0.5, -0.3, 0.2])
+        >>> y = subject_effects[subject_ids] + np.random.randn(15) * 0.3
+        >>> result = evaluate_variance_components(X, y, subject_ids)
+        >>> print(f"ICC: {result['icc']:.3f}")
+    """
+    try:
+        import statsmodels.api as sm
+        from statsmodels.regression.mixed_linear_model import MixedLM
+    except ImportError:
+        return {
+            "error": "statsmodels not installed. Run: pip install statsmodels",
+            "icc": np.nan,
+            "sigma2_between": np.nan,
+            "sigma2_within": np.nan,
+        }
+
+    # ========== 数据验证 ==========
+    n_obs = len(y_train)
+    if len(X_train) != n_obs or len(subject_ids) != n_obs:
+        raise ValueError(
+            f"Shape mismatch: X_train={len(X_train)}, y_train={n_obs}, subject_ids={len(subject_ids)}"
+        )
+
+    # 统计每个被试的观测数
+    unique_subjects = np.unique(subject_ids)
+    n_subjects = len(unique_subjects)
+    obs_per_subject = {int(subj): int(np.sum(subject_ids == subj)) for subj in unique_subjects}
+    mean_obs = np.mean(list(obs_per_subject.values()))
+
+    # ========== 拟合混合效应模型 ==========
+    # 构建设计矩阵
+    if include_predictors and X_train.shape[1] > 0:
+        # Conditional ICC: 包含预测变量的混合模型
+        # y ~ X + (1|subject)
+        X_design = sm.add_constant(X_train)  # 添加截距
+        model_type = "conditional_model"
+    else:
+        # Unconditional ICC: 仅随机截距模型
+        # y ~ 1 + (1|subject)
+        X_design = np.ones((n_obs, 1))  # 仅截距
+        model_type = "null_model"
+
+    try:
+        # MixedLM: groups指定被试ID, 默认包含随机截距
+        lmm = MixedLM(
+            endog=y_train,
+            exog=X_design,
+            groups=subject_ids,
+        )
+        lmm_result = lmm.fit(reml=True, method='powell', maxiter=1000)  # 使用更稳健的优化算法
+
+        # 提取方差成分 (处理不同statsmodels版本的API差异)
+        try:
+            # 新版本: cov_re是DataFrame
+            sigma2_between = float(lmm_result.cov_re.iloc[0, 0])
+        except (AttributeError, TypeError):
+            # 旧版本: cov_re是numpy数组或标量
+            cov_re_array = np.atleast_1d(lmm_result.cov_re)
+            sigma2_between = float(cov_re_array.flat[0])
+        
+        sigma2_within = float(lmm_result.scale)  # 残差方差 (within-subject)
+
+        # 计算ICC
+        icc = sigma2_between / (sigma2_between + sigma2_within)
+        
+        # 如果MixedLM估计的sigma2_between过小(< 1e-6),使用ANOVA降级
+        if sigma2_between < 1e-6:
+            raise ValueError("sigma2_between too small, fallback to ANOVA")
+
+    except Exception as e:
+        # 模型拟合失败时的降级处理
+        print(f"Warning: MixedLM fitting failed ({e}), using simple ANOVA estimator")
+        
+        # 使用简单ANOVA方法估计ICC
+        group_means = np.array([np.mean(y_train[subject_ids == s]) for s in unique_subjects])
+        grand_mean = np.mean(y_train)
+        
+        # Between-group variance
+        ss_between = sum(
+            obs_per_subject[int(s)] * (group_means[i] - grand_mean)**2 
+            for i, s in enumerate(unique_subjects)
+        )
+        ms_between = ss_between / (n_subjects - 1)
+        
+        # Within-group variance
+        ss_within = sum(
+            np.sum((y_train[subject_ids == s] - group_means[i])**2)
+            for i, s in enumerate(unique_subjects)
+        )
+        ms_within = ss_within / (n_obs - n_subjects)
+        
+        # ICC from ANOVA
+        sigma2_within = ms_within
+        sigma2_between = max(0.0, (ms_between - ms_within) / mean_obs)
+        icc = sigma2_between / (sigma2_between + sigma2_within)
+
+    # ========== 估计准确性评估 ==========
+    estimation_accuracy = {}
+    if true_variance_components is not None:
+        true_sigma2_between = true_variance_components.get("sigma2_between", np.nan)
+        true_sigma2_within = true_variance_components.get("sigma2_within", np.nan)
+        
+        if not np.isnan(true_sigma2_between) and not np.isnan(true_sigma2_within):
+            true_icc = true_sigma2_between / (true_sigma2_between + true_sigma2_within)
+            
+            estimation_accuracy = {
+                "true_icc": float(true_icc),
+                "estimated_icc": float(icc),
+                "icc_error": float(abs(icc - true_icc)),
+                "icc_relative_error": float(abs(icc - true_icc) / true_icc) if true_icc > 0 else np.nan,
+                "true_sigma2_between": float(true_sigma2_between),
+                "estimated_sigma2_between": float(sigma2_between),
+                "sigma2_between_error": float(abs(sigma2_between - true_sigma2_between)),
+                "true_sigma2_within": float(true_sigma2_within),
+                "estimated_sigma2_within": float(sigma2_within),
+                "sigma2_within_error": float(abs(sigma2_within - true_sigma2_within)),
+            }
+
+    # ========== 返回结果 ==========
+    return {
+        "icc": float(icc),
+        "sigma2_between": float(sigma2_between),
+        "sigma2_within": float(sigma2_within),
+        "n_subjects": int(n_subjects),
+        "n_observations": int(n_obs),
+        "obs_per_subject": obs_per_subject,
+        "mean_obs_per_subject": float(mean_obs),
+        "min_obs_per_subject": int(min(obs_per_subject.values())),
+        "max_obs_per_subject": int(max(obs_per_subject.values())),
+        "estimation_accuracy": estimation_accuracy,
+        "model_type": model_type,
+    }

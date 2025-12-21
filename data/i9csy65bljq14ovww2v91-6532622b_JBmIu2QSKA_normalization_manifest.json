@@ -1,0 +1,22 @@
+{
+    "source_csv": "i9csy65bljq14ovww2v91-6532622b_JBmIu2QSKA_mapped.csv",
+    "mapping_file": "i9csy65bljq14ovww2v91-6532622b_JBmIu2QSKA_mappings.json",
+    "normalize_method": "zscore",
+    "min_unique_to_normalize": 2,
+    "normalized_csv": "i9csy65bljq14ovww2v91-6532622b_JBmIu2QSKA_mapped_normalized_zscore_v2.csv",
+    "normalize_info": "i9csy65bljq14ovww2v91-6532622b_JBmIu2QSKA_normalize_info_zscore_v2.json",
+    "columns": {
+        "x1_CeilingHeight": {
+            "method": "zscore",
+            "mean": 5.1,
+            "std": 2.4535688292770597
+        },
+        "x2_GridModule": {
+            "method": "zscore",
+            "mean": 7.25,
+            "std": 0.75
+        }
+    },
+    "generated_at": "2025-12-21",
+    "notes": "x3-x6 are categorical and mapped in mapping_file; low-cardinality columns were included (min_unique_to_normalize=2)"
+}

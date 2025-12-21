@@ -1,0 +1,12 @@
+{
+  "x1_CeilingHeight": {
+    "method": "zscore",
+    "mean": 5.1000000000000005,
+    "std": 2.4535688292770597
+  },
+  "x2_GridModule": {
+    "method": "zscore",
+    "mean": 7.25,
+    "std": 0.75
+  }
+}

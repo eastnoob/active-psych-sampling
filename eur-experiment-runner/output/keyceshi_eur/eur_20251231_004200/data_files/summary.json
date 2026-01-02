@@ -1,0 +1,38 @@
+{
+  "experiment": {
+    "timestamp": "eur_20251231_004200",
+    "config": "keyceshi_eur_complete.ini",
+    "result_dir": "output\\keyceshi_eur\\eur_20251231_004200"
+  },
+  "parameters": {
+    "total_budget": 53,
+    "warmup_budget": 3,
+    "eur_budget": 50,
+    "seed": 42
+  },
+  "oracle": {
+    "model_type": "linear",
+    "bias": 0.1,
+    "noise_std": 0.77,
+    "main_weights": [
+      0.3,
+      0.2,
+      -0.4,
+      0.1,
+      0.25,
+      -0.15
+    ],
+    "interaction_weights": {
+      "x1*x2": 0.15,
+      "x2*x4": -0.12
+    }
+  },
+  "sampling_trajectory": {
+    "lambda_t": {},
+    "gamma_t": {},
+    "r_t": {},
+    "diversity": {
+      "unique_samples": 53
+    }
+  }
+}

@@ -1,0 +1,40 @@
+# EUR Experiment Runner Configuration
+# EUR实验运行器配置文件
+
+[experiment]
+name = "Sobol Sampling Test"  # 实验名称 / Experiment name
+description = "Test Sobol quasi-random sampling"  # 实验描述 / Experiment description
+output_dir = "output/sobol_test"  # 输出目录 / Output directory
+
+[design_space]
+# 设计空间定义 / Design space definition
+# 简单6维连续空间 [0, 1]^6 / Simple 6D continuous space [0, 1]^6
+n_params = 6
+param_names = ["x1", "x2", "x3", "x4", "x5", "x6"]
+
+[oracle]
+type = "linear"  # Oracle类型: linear, from_cluster, custom / Oracle type
+seed = 42  # 随机种子 / Random seed
+noise_std = 0.5  # 观测噪声标准差 / Observation noise std
+output_type = "binary"  # 输出类型: binary, likert, continuous / Output type
+
+[oracle.linear]
+# 线性模型参数 / Linear model parameters
+weights = [0.3, 0.2, -0.4, 0.1, 0.25, -0.15]  # 线性权重 / Linear weights
+bias = 0.0  # 截距 / Intercept
+
+[role]
+type = "sobol"  # 使用的角色: sobol, eur, optimize_acqf / Role to use
+
+[role.sobol]
+# Sobol采样没有特殊参数 / Sobol sampling has no special parameters
+
+[behavior]
+type = "single_run"  # 行为类型: single_run, comparison, batch_run / Behavior type
+
+[behavior.single_run]
+budget = 50  # 总采样预算 / Total sampling budget
+warmup_points = 10  # 初始Sobol点数 / Initial Sobol points
+
+[evaluator]
+types = []  # 评估器列表 (暂时为空) / Evaluator list (empty for now)

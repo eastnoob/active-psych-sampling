@@ -1,0 +1,35 @@
+{
+  "experiment": {
+    "timestamp": "sobol_20260102_002622",
+    "config": "keyceshi_eur_complete.ini",
+    "result_dir": "output\\sobol_20\\sobol_20260102_002622"
+  },
+  "parameters": {
+    "total_budget": 20,
+    "warmup_budget": 5,
+    "eur_budget": 15,
+    "seed": 42
+  },
+  "oracle": {
+    "model_type": "linear",
+    "bias": 0.0,
+    "noise_std": 0.5,
+    "main_weights": [
+      0.3,
+      0.2,
+      -0.4,
+      0.1,
+      0.25,
+      -0.15
+    ],
+    "interaction_weights": {}
+  },
+  "sampling_trajectory": {
+    "lambda_t": {},
+    "gamma_t": {},
+    "r_t": {},
+    "diversity": {
+      "unique_samples": 20
+    }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "role": "eur",
+  "timestamp": "2025-12-30T23:28:13.104473",
+  "total_trials": 8,
+  "warmup_trials": 3,
+  "main_trials": 5,
+  "oracle_spec": {
+    "model_type": "linear",
+    "seed": 42,
+    "bias": 0.0,
+    "noise_std": 0.77,
+    "weights": [
+      0.3,
+      0.2,
+      -0.4,
+      0.1,
+      0.25,
+      -0.15
+    ],
+    "interactions": {},
+    "output_type": "continuous",
+    "likert_levels": null,
+    "likert_mode": null,
+    "likert_sensitivity": null
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "role": "sobol",
+  "timestamp": "2025-12-30T22:41:06.184922",
+  "total_trials": 50,
+  "warmup_trials": 10,
+  "main_trials": 40,
+  "oracle_spec": {
+    "model_type": "linear",
+    "seed": 42,
+    "bias": 0.0,
+    "noise_std": 0.5,
+    "weights": [
+      0.3,
+      0.2,
+      -0.4,
+      0.1,
+      0.25,
+      -0.15
+    ],
+    "interactions": {},
+    "output_type": "binary",
+    "likert_levels": null,
+    "likert_mode": null,
+    "likert_sensitivity": null
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "role": "sobol",
+  "timestamp": "2025-12-30T22:52:41.879980",
+  "n_subjects": 3,
+  "budget_per_subject": 30,
+  "warmup_per_subject": 10,
+  "total_trials": 90,
+  "subjects": [
+    {
+      "subject_id": 1,
+      "seed": 43,
+      "trials": 30,
+      "output_dir": "output\\multi_subject_test\\sobol_multi_20251230_225224\\subject_1"
+    },
+    {
+      "subject_id": 2,
+      "seed": 44,
+      "trials": 30,
+      "output_dir": "output\\multi_subject_test\\sobol_multi_20251230_225224\\subject_2"
+    },
+    {
+      "subject_id": 3,
+      "seed": 45,
+      "trials": 30,
+      "output_dir": "output\\multi_subject_test\\sobol_multi_20251230_225224\\subject_3"
+    }
+  ]
+}

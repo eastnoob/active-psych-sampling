@@ -1,0 +1,52 @@
+# Sobol Sampling 20 Trials - 7-point Likert
+# Sobol采样 20次 - 7点里克特
+
+[experiment]
+description = "1 subject, 20 trials of Sobol sampling with 7-point Likert scale"
+name = "Sobol Likert 20"
+output_dir = "output/sobol_20"
+
+[parameters.x1_CeilingHeight]
+par_type = "custom_ordinal_mono"
+values = [2.8, 4.0, 8.5]
+
+[parameters.x2_GridModule]
+par_type = "custom_ordinal_mono"
+values = [6.5, 8.0]
+
+[parameters.x3_OuterFurniture]
+choices = ["Chaos", "Rotated", "Strict"]
+par_type = "categorical"
+
+[parameters.x4_VisualBoundary]
+choices = ["Color", "Solid", "Translucent"]
+par_type = "categorical"
+
+[parameters.x5_PhysicalBoundary]
+choices = ["Closed", "Open"]
+par_type = "categorical"
+
+[parameters.x6_InnerFurniture]
+choices = ["Chaos", "Rotated", "Strict"]
+par_type = "categorical"
+
+[oracle]
+likert_levels = 7
+noise_std = 0.5
+output_type = "likert"
+seed = 42
+type = "linear"
+
+[oracle.linear]
+bias = 0.0
+weights = [0.3, 0.2, -0.4, 0.1, 0.25, -0.15]
+
+[role]
+type = "sobol"
+
+[behavior]
+type = "single_run"
+
+[behavior.single_run]
+budget = 20
+warmup_points = 5

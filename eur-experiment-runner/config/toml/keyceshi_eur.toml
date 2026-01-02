@@ -1,0 +1,33 @@
+# KEY_CESHI EUR Test - Complete Configuration
+# TOML配置指向完整的INI文件
+
+[experiment]
+name = "KEY_CESHI EUR Test"
+output_dir = "output/keyceshi_eur"
+
+[oracle]
+type = "linear"
+seed = 42
+noise_std = 0.77
+output_type = "continuous"
+
+[oracle.linear]
+bias = 0.1
+weights = [0.3, 0.2, -0.4, 0.1, 0.25, -0.15]
+
+[oracle.linear.interactions]
+"1,2" = 0.15
+"2,4" = -0.12
+
+[role]
+type = "eur"
+
+[role.eur]
+ini_config_path = "config/ini/keyceshi_eur_complete.ini"
+
+[behavior]
+type = "single_run"
+
+[behavior.single_run]
+budget = 53  # 3 warmup + 50 EUR
+warmup_points = 3

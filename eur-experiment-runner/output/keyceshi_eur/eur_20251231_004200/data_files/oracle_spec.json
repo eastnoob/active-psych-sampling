@@ -1,0 +1,23 @@
+{
+  "model_type": "linear",
+  "seed": 42,
+  "bias": 0.1,
+  "noise_std": 0.77,
+  "weights": [
+    0.3,
+    0.2,
+    -0.4,
+    0.1,
+    0.25,
+    -0.15
+  ],
+  "interactions": {
+    "x1*x2": 0.15,
+    "x2*x4": -0.12
+  },
+  "output_type": "continuous",
+  "likert_levels": null,
+  "likert_mode": null,
+  "likert_sensitivity": null,
+  "source": "LinearOracle"
+}

@@ -1,0 +1,36 @@
+# Sobol Sampling 20 Trials - Aligned with KEY_CESHI
+# Sobol采样 20次 - 与KEY_CESHI对齐
+
+[experiment]
+description = "1 subject, 20 trials of Sobol sampling, 7-point Likert"
+name = "Sobol Sampling 20 Aligned"
+output_dir = "eur-experiment-runner/output/sobol_20"
+
+[parameters]
+x1_CeilingHeight = {par_type = "custom_ordinal_mono", values = [2.8, 4.0, 8.5]}
+x2_GridModule = {par_type = "custom_ordinal_mono", values = [6.5, 8.0]}
+x3_OuterFurniture = {par_type = "categorical", choices = ["Chaos", "Rotated", "Strict"]}
+x4_VisualBoundary = {par_type = "categorical", choices = ["Color", "Solid", "Translucent"]}
+x5_PhysicalBoundary = {par_type = "categorical", choices = ["Closed", "Open"]}
+x6_InnerFurniture = {par_type = "categorical", choices = ["Chaos", "Rotated", "Strict"]}
+
+[oracle]
+likert_levels = 7
+noise_std = 0.5
+output_type = "likert"
+seed = 42
+type = "linear"
+
+[oracle.linear]
+bias = 0.0
+weights = [0.3, 0.2, -0.4, 0.1, 0.25, -0.15]
+
+[role]
+type = "sobol"
+
+[behavior]
+type = "single_run"
+
+[behavior.single_run]
+budget = 20
+warmup_points = 5

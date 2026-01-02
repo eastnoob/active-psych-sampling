@@ -1,0 +1,28 @@
+# Multi-Subject Sobol Test Configuration
+# 多被试Sobol采样测试配置
+
+[experiment]
+name = "Multi-Subject Sobol Test"  # 实验名称 / Experiment name
+output_dir = "output/multi_subject_test"  # 输出目录 / Output directory
+
+[oracle]
+type = "linear"  # Oracle类型 / Oracle type
+seed = 42  # 随机种子(每个被试会自动+1) / Random seed (auto-incremented per subject)
+noise_std = 0.5  # 噪声标准差 / Noise standard deviation
+output_type = "binary"  # 输出类型: binary, continuous, likert / Output type
+
+[oracle.linear]
+# 线性模型权重(可选,默认随机生成) / Linear model weights (optional, random if not specified)
+# weights = [0.3, 0.2, -0.4, 0.1, 0.25, -0.15]
+bias = 0.0  # 偏置项 / Bias term
+
+[role]
+type = "sobol"  # 采样方法: sobol / Sampling method
+
+[behavior]
+type = "multi_subject_run"  # 行为类型: multi_subject_run / Behavior type
+
+[behavior.multi_subject_run]
+budget = 30  # 每个被试的总采样预算 / Total sampling budget per subject
+warmup_points = 10  # 每个被试的初始Sobol点数 / Initial Sobol points per subject
+n_subjects = 3  # 被试数量 / Number of subjects

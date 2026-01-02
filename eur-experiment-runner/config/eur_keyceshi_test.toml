@@ -1,0 +1,39 @@
+# EUR Test Configuration - KEY_CESHI 1:1 Replication
+# EUR采样测试配置 - KEY_CESHI 一比一复刻
+
+[experiment]
+name = "EUR Sampling Test - KEY_CESHI Replication"
+output_dir = "output/eur_keyceshi_test"
+
+[oracle]
+type = "linear"
+seed = 42
+noise_std = 0.77  # KEY_CESHI uses 0.77
+output_type = "continuous"  # KEY_CESHI uses continuous, not binary
+
+[oracle.linear]
+bias = 0.0
+
+[role]
+type = "eur"
+
+[role.eur]
+ini_config_path = "config/eur_strategy_template.ini"
+
+[behavior]
+type = "single_run"
+
+[behavior.single_run]
+budget = 53  # 3 warmup + 50 EUR
+warmup_points = 3
+
+# Parameter definitions matching KEY_CESHI
+# x1, x2: ordinal (numeric discrete)
+# x3-x6: categorical (string choices)
+[parameters]
+x1_CeilingHeight = { par_type = "custom_ordinal_mono", values = [2.8, 4.0, 8.5] }
+x2_GridModule = { par_type = "custom_ordinal_mono", values = [6.5, 8.0] }
+x3_OuterFurniture = { par_type = "categorical", choices = ["Chaos", "Rotated", "Strict"] }
+x4_VisualBoundary = { par_type = "categorical", choices = ["Color", "Solid", "Translucent"] }
+x5_PhysicalBoundary = { par_type = "categorical", choices = ["Closed", "Open"] }
+x6_InnerFurniture = { par_type = "categorical", choices = ["Chaos", "Rotated", "Strict"] }

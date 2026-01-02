@@ -1,0 +1,28 @@
+{
+  "role": "eur",
+  "timestamp": "2025-12-30T23:14:32.041962",
+  "n_subjects": 3,
+  "budget_per_subject": 50,
+  "warmup_per_subject": 10,
+  "total_trials": 150,
+  "subjects": [
+    {
+      "subject_id": 1,
+      "seed": 43,
+      "trials": 50,
+      "output_dir": "output\\eur_multi_test\\eur_multi_20251230_231221\\subject_1"
+    },
+    {
+      "subject_id": 2,
+      "seed": 44,
+      "trials": 50,
+      "output_dir": "output\\eur_multi_test\\eur_multi_20251230_231221\\subject_2"
+    },
+    {
+      "subject_id": 3,
+      "seed": 45,
+      "trials": 50,
+      "output_dir": "output\\eur_multi_test\\eur_multi_20251230_231221\\subject_3"
+    }
+  ]
+}

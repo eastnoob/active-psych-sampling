@@ -1,0 +1,23 @@
+{
+  "generated_at": "2025-12-21 20:28:00",
+  "n_subjects": 50,
+  "population_std": 0.35,
+  "individual_std": 0.105,
+  "interaction_pairs": [
+    "3,4",
+    "0,1"
+  ],
+  "seed": 20251221,
+  "jitter_sd": 0.0,
+  "normalize": false,
+  "normalize_method": "zscore",
+  "normalize_info": {},
+  "normality_min_coverage": 2,
+  "normality_max_single_ratio": 0.75,
+  "normality_mean_range": [
+    2.25,
+    4.75
+  ],
+  "likert_levels": 6,
+  "likert_sensitivity": 2.0
+}

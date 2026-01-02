@@ -1,0 +1,188 @@
+{
+  "model_type": "linear",
+  "weights": [
+    -0.05942445514843516,
+    0.10893066200074253,
+    -0.597495133539298,
+    -0.6297982579734926,
+    0.5284479680643263,
+    0.5204177210486531
+  ],
+  "interaction_weights": {
+    "3,4": 0.025655680071750675,
+    "0,1": 0.21931297400195301
+  },
+  "bias": 0.0,
+  "noise_std": 0.0,
+  "likert_levels": 6,
+  "likert_sensitivity": 2.0,
+  "seed": 20251229,
+  "subject_id": "subject_9",
+  "response_statistics": {
+    "count": 324,
+    "mean": 2.6481481481481484,
+    "std": 1.8953231009684,
+    "median": 2.0,
+    "min": 1,
+    "max": 6,
+    "distribution": {
+      "1": 155,
+      "3": 45,
+      "2": 26,
+      "5": 36,
+      "4": 18,
+      "6": 44
+    }
+  },
+  "validation": {
+    "passed": true,
+    "reason": "OK",
+    "coverage": 6,
+    "max_ratio": 0.4783950617283951,
+    "mean": 2.6481481481481484
+  },
+  "validation_attempts": [
+    {
+      "passed": false,
+      "reason": "Mean out of range: 2.21 not in (2.25, 4.75)",
+      "coverage": 6,
+      "max_ratio": 0.595679012345679,
+      "mean": 2.212962962962963
+    },
+    {
+      "passed": false,
+      "reason": "Mean out of range: 2.21 not in (2.25, 4.75)",
+      "coverage": 6,
+      "max_ratio": 0.595679012345679,
+      "mean": 2.212962962962963
+    },
+    {
+      "passed": false,
+      "reason": "Mean out of range: 2.21 not in (2.25, 4.75)",
+      "coverage": 6,
+      "max_ratio": 0.595679012345679,
+      "mean": 2.212962962962963
+    },
+    {
+      "passed": false,
+      "reason": "Mean out of range: 2.21 not in (2.25, 4.75)",
+      "coverage": 6,
+      "max_ratio": 0.595679012345679,
+      "mean": 2.212962962962963
+    },
+    {
+      "passed": false,
+      "reason": "Mean out of range: 2.21 not in (2.25, 4.75)",
+      "coverage": 6,
+      "max_ratio": 0.595679012345679,
+      "mean": 2.212962962962963
+    },
+    {
+      "passed": false,
+      "reason": "Mean out of range: 2.21 not in (2.25, 4.75)",
+      "coverage": 6,
+      "max_ratio": 0.595679012345679,
+      "mean": 2.212962962962963
+    },
+    {
+      "passed": false,
+      "reason": "Mean out of range: 2.21 not in (2.25, 4.75)",
+      "coverage": 6,
+      "max_ratio": 0.595679012345679,
+      "mean": 2.212962962962963
+    },
+    {
+      "passed": false,
+      "reason": "Mean out of range: 2.21 not in (2.25, 4.75)",
+      "coverage": 6,
+      "max_ratio": 0.595679012345679,
+      "mean": 2.212962962962963
+    },
+    {
+      "passed": false,
+      "reason": "Mean out of range: 2.21 not in (2.25, 4.75)",
+      "coverage": 6,
+      "max_ratio": 0.595679012345679,
+      "mean": 2.212962962962963
+    },
+    {
+      "passed": false,
+      "reason": "Mean out of range: 2.21 not in (2.25, 4.75)",
+      "coverage": 6,
+      "max_ratio": 0.595679012345679,
+      "mean": 2.212962962962963
+    },
+    {
+      "passed": false,
+      "reason": "Mean out of range: 2.21 not in (2.25, 4.75)",
+      "coverage": 6,
+      "max_ratio": 0.595679012345679,
+      "mean": 2.212962962962963
+    },
+    {
+      "passed": false,
+      "reason": "Mean out of range: 2.21 not in (2.25, 4.75)",
+      "coverage": 6,
+      "max_ratio": 0.595679012345679,
+      "mean": 2.212962962962963
+    },
+    {
+      "passed": false,
+      "reason": "Mean out of range: 2.21 not in (2.25, 4.75)",
+      "coverage": 6,
+      "max_ratio": 0.595679012345679,
+      "mean": 2.212962962962963
+    },
+    {
+      "passed": false,
+      "reason": "Mean out of range: 2.21 not in (2.25, 4.75)",
+      "coverage": 6,
+      "max_ratio": 0.595679012345679,
+      "mean": 2.212962962962963
+    },
+    {
+      "passed": false,
+      "reason": "Mean out of range: 2.21 not in (2.25, 4.75)",
+      "coverage": 6,
+      "max_ratio": 0.595679012345679,
+      "mean": 2.212962962962963
+    },
+    {
+      "passed": false,
+      "reason": "Mean out of range: 2.21 not in (2.25, 4.75)",
+      "coverage": 6,
+      "max_ratio": 0.595679012345679,
+      "mean": 2.212962962962963
+    },
+    {
+      "passed": false,
+      "reason": "Mean out of range: 2.21 not in (2.25, 4.75)",
+      "coverage": 6,
+      "max_ratio": 0.595679012345679,
+      "mean": 2.212962962962963
+    },
+    {
+      "passed": false,
+      "reason": "Mean out of range: 2.21 not in (2.25, 4.75)",
+      "coverage": 6,
+      "max_ratio": 0.595679012345679,
+      "mean": 2.212962962962963
+    },
+    {
+      "passed": false,
+      "reason": "Mean out of range: 2.21 not in (2.25, 4.75)",
+      "coverage": 6,
+      "max_ratio": 0.595679012345679,
+      "mean": 2.212962962962963
+    },
+    {
+      "passed": false,
+      "reason": "Mean out of range: 2.21 not in (2.25, 4.75)",
+      "coverage": 6,
+      "max_ratio": 0.595679012345679,
+      "mean": 2.212962962962963
+    }
+  ],
+  "used_population_weights": true,
+  "fallback_reason": "Mean out of range: 2.21 not in (2.25, 4.75)"
+}

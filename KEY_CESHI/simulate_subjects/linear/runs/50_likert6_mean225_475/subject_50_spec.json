@@ -1,0 +1,54 @@
+{
+  "model_type": "linear",
+  "weights": [
+    0.011046286582002025,
+    -0.0028378120194694073,
+    -0.49660720468957775,
+    -0.5765524879288136,
+    0.3923802196625553,
+    0.6307476239661297
+  ],
+  "interaction_weights": {
+    "3,4": 0.025655680071750675,
+    "0,1": 0.21931297400195301
+  },
+  "bias": 0.0,
+  "noise_std": 0.0,
+  "likert_levels": 6,
+  "likert_sensitivity": 2.0,
+  "seed": 20251270,
+  "subject_id": "subject_50",
+  "response_statistics": {
+    "count": 324,
+    "mean": 3.0246913580246915,
+    "std": 1.9734366129252692,
+    "median": 2.0,
+    "min": 1,
+    "max": 6,
+    "distribution": {
+      "3": 31,
+      "1": 119,
+      "5": 44,
+      "2": 46,
+      "6": 60,
+      "4": 24
+    }
+  },
+  "validation": {
+    "passed": true,
+    "reason": "OK",
+    "coverage": 6,
+    "max_ratio": 0.36728395061728397,
+    "mean": 3.0246913580246915
+  },
+  "validation_attempts": [
+    {
+      "passed": true,
+      "reason": "OK",
+      "coverage": 6,
+      "max_ratio": 0.36728395061728397,
+      "mean": 3.0246913580246915
+    }
+  ],
+  "used_population_weights": false
+}

@@ -1,0 +1,7 @@
+{
+  "timestamp": "2025-12-14T13:49:07.359121",
+  "config_file": "configs\\eur_residual_test.ini",
+  "budget": 10,
+  "n_pairs": 1,
+  "seed_start": 100
+}

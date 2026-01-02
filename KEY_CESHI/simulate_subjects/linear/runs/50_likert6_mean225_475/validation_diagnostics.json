@@ -1,0 +1,9 @@
+{
+  "n_subjects": 50,
+  "n_fallback": 3,
+  "fallback_frac": 0.06,
+  "fallback_reasons": {
+    "Mean out of range: 2.02 not in (2.25, 4.75)": 1,
+    "Mean out of range: 2.21 not in (2.25, 4.75)": 2
+  }
+}

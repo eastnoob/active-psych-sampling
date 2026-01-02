@@ -1,0 +1,577 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+EUR采集器残差测试
+使用BaseGP关键点作为warmup，测试EUR采集函数性能
+"""
+
+import sys
+import io
+import argparse
+from pathlib import Path
+import json
+import numpy as np
+import torch
+import pandas as pd
+from datetime import datetime
+from typing import Dict, List
+
+# Fix encoding
+if sys.stdout.encoding != 'utf-8':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+
+# Setup paths
+PROJECT_ROOT = Path(__file__).parent.parent.parent.parent  # scripts -> 20251212 -> KEY_CESHI -> active-psych-sampling
+sys.path.insert(0, str(PROJECT_ROOT))
+
+# Imports
+from loguru import logger
+logger.remove()
+logger.add(sys.stderr, level='INFO')
+
+import gpytorch
+from aepsych.config import Config
+from aepsych.strategy import Strategy, SequentialStrategy
+
+# Import custom generator
+from extensions.custom_generators.custom_pool_based_generator import CustomPoolBasedGenerator
+
+# Import EUR acquisition function
+from extensions.dynamic_eur_acquisition.eur_anova_multi import EURAnovaMultiAcqf
+
+# Import custom factory
+from extensions.custom_factory import CustomBaseGPResidualFactory
+
+# Import KEY_CESHI modules
+sys.path.insert(0, str(Path(__file__).parent / 'modules'))
+from design_space import load_design_space
+from data_saver import (
+    save_sampling_data,
+    save_oracle_spec,
+    save_iterations_csv,
+    save_enhanced_summary
+)
+from evaluation_v2 import evaluate_effect_recovery_v2
+
+
+class PopulationConsistentOracle:
+    """Oracle模型，使用BaseGP训练群体的固定权重。
+
+    确保新被试与BaseGP训练数据保持一致的族群特征。
+    """
+
+    def __init__(self, fixed_weights_path: Path, interaction_pairs: list, seed=42, noise_std=0.77):
+        """初始化Oracle。
+
+        Args:
+            fixed_weights_path: 固定权重JSON文件路径
+            interaction_pairs: 交互对列表 [[i,j], ...]
+            seed: 随机种子
+            noise_std: 噪声标准差
+        """
+        np.random.seed(seed)
+        self.seed = seed
+        self.noise_std = noise_std
+        self.interaction_pairs = interaction_pairs
+
+        # Load fixed weights from JSON
+        with open(fixed_weights_path, 'r') as f:
+            data = json.load(f)
+
+        # Extract weights
+        if "global" in data:
+            # Shape: (1, num_features) → (num_features,)
+            self.weights = np.array(data["global"][0], dtype=float)
+        else:
+            raise ValueError(f"JSON格式错误，缺少'global'键: {fixed_weights_path}")
+
+        # Extract bias
+        self.bias = float(data.get("bias", 0.0))
+
+        # Extract interaction weights
+        self.interaction_weights = {}
+        if "interactions" in data:
+            for key, value in data["interactions"].items():
+                # Parse key like "3,4" → (3, 4)
+                i, j = map(int, key.split(","))
+                self.interaction_weights[(i, j)] = float(value)
+
+        logger.info(f"Loaded population-consistent Oracle from {fixed_weights_path.name}")
+        logger.info(f"  Weights: {self.weights}")
+        logger.info(f"  Bias: {self.bias}")
+        logger.info(f"  Interaction weights: {self.interaction_weights}")
+
+    def query(self, x: np.ndarray) -> float:
+        """查询Oracle响应。
+
+        Args:
+            x: 参数向量 (6,)
+
+        Returns:
+            连续值响应
+        """
+        # Main effects
+        linear = self.bias + np.dot(self.weights, x)
+
+        # Interaction effects
+        for (i, j), weight in self.interaction_weights.items():
+            linear += weight * x[i] * x[j]
+
+        # Add noise
+        noise = np.random.randn() * self.noise_std
+        return linear + noise
+
+    def get_model_spec(self) -> Dict:
+        """返回Oracle模型规格。
+
+        Returns:
+            包含权重、偏置、交互项等的字典
+        """
+        # Convert interaction_weights dict to the format expected by data_saver
+        interaction_terms = {}
+        for (i, j), weight in self.interaction_weights.items():
+            interaction_terms[f"x{i}*x{j}"] = weight
+
+        return {
+            'model_type': 'linear',
+            'num_features': len(self.weights),
+            'seed': self.seed,
+            'bias': float(self.bias),
+            'noise_std': self.noise_std,
+            'weights': self.weights.tolist(),
+            'interaction_terms': interaction_terms,
+            'source': f'PopulationConsistentOracle (seed={self.seed})'
+        }
+
+
+def load_basegp_keypoints(basegp_path: Path) -> Dict[str, Dict]:
+    """加载BaseGP关键点，返回包含实际值（包括字符串）的配置字典。
+
+    Args:
+        basegp_path: BaseGP关键点JSON文件路径
+
+    Returns:
+        关键点字典 {'x_best': config_dict, 'x_worst': config_dict, 'x_max_std': config_dict}
+        其中config_dict的值已转换为实际类型（数值或字符串）
+    """
+    with open(basegp_path, 'r') as f:
+        data = json.load(f)
+
+    # 定义分类变量的索引到字符串的映射
+    categorical_mappings = {
+        'x3_OuterFurniture': ['Chaos', 'Rotated', 'Strict'],
+        'x4_VisualBoundary': ['Color', 'Solid', 'Translucent'],
+        'x5_PhysicalBoundary': ['Closed', 'Open'],
+        'x6_InnerFurniture': ['Chaos', 'Rotated', 'Strict']
+    }
+
+    keypoints = {}
+    for key in ['x_best_prior', 'x_worst_prior', 'x_max_std']:
+        if key in data:
+            point_dict = data[key]
+            # 转换为配置字典（保持数值类型，分类变量映射为字符串）
+            config_dict = {}
+            for param, value in point_dict.items():
+                if param in categorical_mappings:
+                    # 分类变量：索引 → 字符串
+                    idx = int(value)
+                    config_dict[param] = categorical_mappings[param][idx]
+                else:
+                    # 数值变量：保持原值
+                    config_dict[param] = float(value)
+
+            keypoints[key.replace('_prior', '')] = config_dict
+
+    logger.info(f"Loaded {len(keypoints)} BaseGP keypoints")
+    return keypoints
+
+
+def warmup_with_keypoints(
+    strat: Strategy,
+    keypoints: Dict[str, Dict],
+    oracle: SimpleOracle,
+    parnames: List[str]
+) -> List[Dict]:
+    """使用BaseGP关键点进行warmup。
+
+    Args:
+        strat: Strategy实例
+        keypoints: 关键点字典，值为配置字典
+        oracle: Oracle实例
+        parnames: 参数名列表
+
+    Returns:
+        warmup日志
+    """
+    warmup_logs = []
+
+    # 分类变量映射（用于Oracle查询）
+    categorical_to_idx = {
+        'x3_OuterFurniture': {'Chaos': 0, 'Rotated': 1, 'Strict': 2},
+        'x4_VisualBoundary': {'Color': 0, 'Solid': 1, 'Translucent': 2},
+        'x5_PhysicalBoundary': {'Closed': 0, 'Open': 1},
+        'x6_InnerFurniture': {'Chaos': 0, 'Rotated': 1, 'Strict': 2}
+    }
+
+    for key_name, x_config in keypoints.items():
+        # 转换为数值数组供Oracle使用（字符串 → 索引）
+        x_array = np.zeros(len(parnames))
+        for i, param in enumerate(parnames):
+            value = x_config[param]
+            if param in categorical_to_idx:
+                # 字符串分类变量 → 索引
+                x_array[i] = categorical_to_idx[param][value]
+            else:
+                # 数值变量
+                x_array[i] = float(value)
+
+        # 查询Oracle
+        y = oracle.query(x_array)
+
+        # Tell strategy (使用数值数组)
+        strat.add_data(x_array, [y])
+
+        warmup_logs.append({
+            'keypoint_name': key_name,
+            'x_config': x_config,
+            'x_array': x_array.tolist(),
+            'y': y
+        })
+
+        logger.info(f"  Warmup {key_name}: y={y}")
+
+    return warmup_logs
+
+
+def run_eur_sampling(
+    strat: Strategy,
+    oracle: SimpleOracle,
+    parnames: List[str],
+    budget: int
+) -> Dict:
+    """运行EUR采样循环。
+
+    Args:
+        strat: Strategy实例
+        oracle: Oracle实例
+        parnames: 参数名列表
+        budget: 采样预算
+
+    Returns:
+        采样结果字典
+    """
+    sampling_history = []
+    interaction_logs = []
+
+    # 分类变量映射（用于将索引转换回字符串）
+    idx_to_categorical = {
+        'x3_OuterFurniture': ['Chaos', 'Rotated', 'Strict'],
+        'x4_VisualBoundary': ['Color', 'Solid', 'Translucent'],
+        'x5_PhysicalBoundary': ['Closed', 'Open'],
+        'x6_InnerFurniture': ['Chaos', 'Rotated', 'Strict']
+    }
+
+    logger.info(f"Starting EUR sampling: budget={budget}")
+
+    for trial_idx in range(budget):
+        # Ask for next configuration (returns tensor)
+        x_next = strat.gen()
+
+        # Convert tensor to numpy array
+        if isinstance(x_next, torch.Tensor):
+            x_array = x_next.cpu().numpy().flatten()
+        else:
+            x_array = np.array(x_next).flatten()
+
+        # Convert numeric array back to config dict for logging
+        x_config = {}
+        for i, param in enumerate(parnames):
+            value = x_array[i]
+            if param in idx_to_categorical:
+                # 索引 → 字符串
+                x_config[param] = idx_to_categorical[param][int(value)]
+            else:
+                # 数值变量
+                x_config[param] = float(value)
+
+        # Query oracle (uses numeric array)
+        y = oracle.query(x_array)
+
+        # Tell strategy (使用数值数组)
+        strat.add_data(x_array, [y])
+
+        # Log
+        sampling_history.append(x_array.tolist())
+        interaction_logs.append({
+            'trial': trial_idx,
+            'x_config': x_config,
+            'x_array': x_array.tolist(),
+            'y': y
+        })
+
+        if (trial_idx + 1) % 10 == 0:
+            logger.info(f"  Trial {trial_idx + 1}/{budget} completed")
+
+    return {
+        'sampling_history': sampling_history,
+        'interaction_logs': interaction_logs
+    }
+
+
+def main():
+    parser = argparse.ArgumentParser(description='EUR Residual Sampling Test')
+    parser.add_argument('--budget', type=int, default=50, help='EUR sampling budget')
+    parser.add_argument('--seed', type=int, default=42, help='Random seed')
+    args = parser.parse_args()
+
+    logger.info("=" * 80)
+    logger.info("EUR Residual Sampling Test")
+    logger.info("=" * 80)
+    logger.info(f"Budget: {args.budget}, Seed: {args.seed}")
+
+    # Create result directory
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    result_dir = Path(__file__).parent / 'results' / timestamp
+    result_dir.mkdir(parents=True, exist_ok=True)
+    logger.info(f"Results directory: {result_dir}")
+
+    # Paths
+    config_path = Path(__file__).parent / 'configs' / 'eur_residual_test.ini'
+    design_space_path = PROJECT_ROOT / 'data' / 'i9csy65bljq14ovww2v91-6532622b_JBmIu2QSKA.csv'
+    basegp_keypoints_path = PROJECT_ROOT / 'extensions' / 'warmup_budget_check' / 'phase1_analysis_output' / '202512081445' / 'step3' / 'base_gp_key_points.json'
+
+    # Load resources
+    logger.info("Loading resources...")
+    logger.info(f"  Config: {config_path}")
+    logger.info(f"  Design space: {design_space_path}")
+    logger.info(f"  BaseGP keypoints: {basegp_keypoints_path}")
+
+    # Load design space
+    design_space_df = load_design_space(str(design_space_path))
+    logger.info(f"  Design space shape: {design_space_df.shape}")
+
+    # Load BaseGP keypoints
+    keypoints = load_basegp_keypoints(basegp_keypoints_path)
+
+    # Create Oracle using population-consistent parameters
+    # Fixed weights path from BaseGP training session
+    fixed_weights_path = PROJECT_ROOT / 'extensions' / 'warmup_budget_check' / 'phase1_analysis_output' / '202512081445' / 'step1_5' / 'result' / 'fixed_weights_auto.json'
+
+    # Interaction pairs from BaseGP training (0-indexed)
+    interaction_pairs = [[1, 2], [2, 5]]  # (x2,x3) and (x3,x6)
+
+    # Create oracle using PopulationConsistentOracle
+    logger.info(f"Creating oracle with fixed weights from: {fixed_weights_path}")
+    oracle = PopulationConsistentOracle(
+        fixed_weights_path=fixed_weights_path,
+        interaction_pairs=interaction_pairs,
+        seed=args.seed,
+        noise_std=0.77  # Population noise std from Simulated_Subject_Parameters.md
+    )
+    logger.info(f"Oracle created with population-consistent parameters")
+    logger.info(f"  Interaction pairs: {interaction_pairs}")
+
+    # Load config and create strategy
+    logger.info("Creating Strategy...")
+
+    # Read config file
+    with open(config_path, 'r', encoding='utf-8') as f:
+        config_str = f.read()
+
+    # Convert design space to pool_points format
+    # Pool points需要数值编码：字符串 → 索引
+    categorical_to_idx = {
+        'x3_OuterFurniture': {'Chaos': 0, 'Rotated': 1, 'Strict': 2},
+        'x4_VisualBoundary': {'Color': 0, 'Solid': 1, 'Translucent': 2},
+        'x5_PhysicalBoundary': {'Closed': 0, 'Open': 1},
+        'x6_InnerFurniture': {'Chaos': 0, 'Rotated': 1, 'Strict': 2}
+    }
+
+    pool_points = []
+    for _, row in design_space_df.iterrows():
+        point = []
+        for param in ['x1_CeilingHeight', 'x2_GridModule', 'x3_OuterFurniture',
+                      'x4_VisualBoundary', 'x5_PhysicalBoundary', 'x6_InnerFurniture']:
+            value = row[param]
+            if param in categorical_to_idx:
+                # 字符串 → 索引
+                point.append(categorical_to_idx[param][value])
+            else:
+                # 数值保持
+                point.append(float(value))
+        pool_points.append(point)
+
+    # 动态注入pool_points
+    pool_points_str = str(pool_points)
+    config_str = config_str.replace(
+        '# pool_points will be injected dynamically from design space',
+        f'pool_points = {pool_points_str}'
+    )
+    logger.info(f"Injected {len(pool_points)} pool points into config")
+
+    # Convert pool_points to numpy array for evaluation
+    design_space_array = np.array(pool_points)
+
+    # 动态注入golden points到ManualGenerator
+    # Convert keypoints to INDEX SPACE for ManualGenerator
+    # ManualGenerator will normalize these internally
+
+    # Ordinal parameter value→index mappings
+    ordinal_to_idx = {
+        'x1_CeilingHeight': {2.8: 0, 4.0: 1, 8.5: 2},
+        'x2_GridModule': {6.5: 0, 8.0: 1}
+    }
+
+    golden_points = []
+    for key_name in ['x_best', 'x_worst', 'x_max_std']:
+        x_config = keypoints[key_name]
+        point = []
+        for param in ['x1_CeilingHeight', 'x2_GridModule', 'x3_OuterFurniture',
+                      'x4_VisualBoundary', 'x5_PhysicalBoundary', 'x6_InnerFurniture']:
+            value = x_config[param]
+            if param in ordinal_to_idx:
+                # Ordinal: actual value → index
+                point.append(ordinal_to_idx[param][value])
+            elif param in categorical_to_idx:
+                # Categorical: string → index
+                point.append(categorical_to_idx[param][value])
+            else:
+                # Should not reach here
+                point.append(float(value))
+        golden_points.append(point)
+
+    golden_points_str = str(golden_points)
+    logger.info(f"Golden points to inject: {golden_points}")
+    config_str = config_str.replace(
+        '# Golden points from BaseGP will be injected dynamically',
+        f'points = {golden_points_str}'
+    )
+    logger.info(f"Injected {len(golden_points)} golden points (BaseGP keypoints) into ManualGenerator")
+
+    # Create config from modified string
+    temp_config_path = result_dir / 'temp_config.ini'
+    with open(temp_config_path, 'w') as f:
+        f.write(config_str)
+    logger.info(f"Saved temporary config to: {temp_config_path}")
+
+    # Build Config via file path (AEPsych API)
+    config = Config(config_fnames=[temp_config_path])
+
+    # Register custom components
+    config.register_object(CustomPoolBasedGenerator)
+    config.register_object(EURAnovaMultiAcqf)
+    config.register_object(CustomBaseGPResidualFactory)
+    logger.info(f"Registered custom components: CustomPoolBasedGenerator, EURAnovaMultiAcqf, CustomBaseGPResidualFactory")
+
+    # Access parnames and strategy_names from the common section
+    import ast
+    parnames = ast.literal_eval(config['common']['parnames'])
+    # strategy_names uses bare identifiers like [init_strat, eur_strat]
+    # Parse manually by removing brackets and splitting
+    strategy_names_str = config['common']['strategy_names'].strip()
+    if strategy_names_str.startswith('[') and strategy_names_str.endswith(']'):
+        strategy_names = [s.strip() for s in strategy_names_str[1:-1].split(',')]
+    else:
+        strategy_names = [strategy_names_str]
+    logger.info(f"Parameters: {parnames}")
+    logger.info(f"Creating {len(strategy_names)} strategies: {strategy_names}")
+
+    strategies = []
+    for strat_name in strategy_names:
+        s = Strategy.from_config(config, name=strat_name)
+        strategies.append(s)
+        logger.info(f"  Created strategy '{strat_name}'")
+
+    strat = SequentialStrategy(strategies)
+    logger.info(f"SequentialStrategy created with {len(strat.strat_list)} sub-strategies")
+
+    # Create warmup logs for the three golden points (they will be used by ManualGenerator)
+    logger.info("BaseGP golden points will be used by init_strat (ManualGenerator)")
+    warmup_logs = []
+    for key_name in ['x_best', 'x_worst', 'x_max_std']:
+        x_config = keypoints[key_name]
+        warmup_logs.append({
+            'keypoint_name': key_name,
+            'x_config': x_config,
+            'note': 'Will be sampled by ManualGenerator in init_strat'
+        })
+    logger.info(f"Prepared {len(warmup_logs)} golden points for ManualGenerator")
+
+    # Run EUR sampling
+    logger.info("Running EUR sampling...")
+    results = run_eur_sampling(strat, oracle, parnames, args.budget)
+    logger.info(f"Sampling completed: {len(results['sampling_history'])} samples")
+
+    # Save data
+    logger.info("Saving results...")
+    save_sampling_data(
+        result_dir,
+        results['sampling_history'],
+        results['interaction_logs']
+    )
+
+    # Save warmup logs
+    with open(result_dir / 'data_files' / 'warmup_logs.json', 'w', encoding='utf-8') as f:
+        json.dump(warmup_logs, f, indent=2, ensure_ascii=False)
+
+    # Save Oracle specification
+    logger.info("Saving Oracle specification...")
+    save_oracle_spec(result_dir, oracle, source=f"PopulationConsistentOracle (seed={args.seed}, population=202512081445)")
+
+    # Evaluate effect recovery (需要server接口，创建简单包装)
+    logger.info("Evaluating effect recovery...")
+    class ServerWrapper:
+        """Simple wrapper to provide server interface for evaluation_v2"""
+        def __init__(self, strategy):
+            self._strats = [strategy]
+
+    server_wrapper = ServerWrapper(strat)
+    eval_results = evaluate_effect_recovery_v2(
+        server=server_wrapper,
+        oracle=oracle,
+        design_space=design_space_array,
+        configured_pairs=interaction_pairs  # Use actual interaction pairs from BaseGP training
+    )
+
+    # Save iterations CSV
+    logger.info("Saving iterations CSV...")
+    save_iterations_csv(
+        result_dir,
+        results['interaction_logs'],
+        eur_diagnostics=None,  # EUR diagnostics not collected in this version
+        warmup_budget=len(warmup_logs)
+    )
+
+    # Prepare config dict for enhanced summary
+    config_dict = {
+        'config_name': config_path.name,
+        'tag': None,
+        'config_path': str(config_path),
+        'interaction_pairs': interaction_pairs,  # Use actual interaction pairs from BaseGP training
+        'parnames': parnames
+    }
+
+    # Get oracle spec
+    oracle_spec = oracle.get_model_spec()
+
+    # Save enhanced summary
+    logger.info("Saving enhanced summary...")
+    save_enhanced_summary(
+        result_dir=result_dir,
+        config=config_dict,
+        oracle_spec=oracle_spec,
+        interaction_logs=results['interaction_logs'],
+        eur_diagnostics=None,
+        eval_results=eval_results,
+        warmup_budget=len(warmup_logs),
+        seed=args.seed
+    )
+
+    logger.info("=" * 80)
+    logger.info("Done!")
+    logger.info(f"Results saved to: {result_dir}")
+    logger.info("=" * 80)
+
+
+if __name__ == '__main__':
+    main()

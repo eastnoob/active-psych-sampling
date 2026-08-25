@@ -1,0 +1,14 @@
+# Step 1: Warmup Sampling Configuration
+design_csv = "data/design.csv" # 设计空间CSV文件路径（只包含自变量）
+n_subjects = 5 # 被试数量
+trials_per_subject = 10 # 每个被试的测试次数
+interaction_mode = "hybrid" # 交互设置保留给后续步骤与元信息
+interaction_pairs = [] # 指定的交互对索引列表，例如 [[0, 1], [2, 3]]
+output_root = "output" # 整个工作流输出根目录；实际步骤目录固定为 output_root/timestamp/step1
+allocation_mode = "disjoint" # 分配模式: disjoint (默认每人不同) / shared (所有人同一套)
+shared_points = 0 # 所有被试共享的 LHS 点数，默认 0 表示纯覆盖
+lhs_oversample_factor = 5 # LHS 候选放大倍数，越大越容易映射到更分散的离散点
+merge = false # 是否合并为一个CSV文件
+auto_confirm = false # 是否自动确认预算评估 (如果为 false，则会暂停等待用户确认)
+repeat_one_point = false # 是否在被试内增加一个重复点 (用于估计纯误差/噪声)
+random_seed = 42 # 随机种子

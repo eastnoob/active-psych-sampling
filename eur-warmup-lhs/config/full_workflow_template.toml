@@ -1,0 +1,93 @@
+# EUR-Warmup Full Workflow Configuration
+# 这是一个完整的全流程配置文件，你可以手动修改后在 CLI 中选择使用。
+
+[step1]
+# Step 1: Warmup Sampling Configuration
+auto_confirm = false # 是否自动确认预算评估 (如果为 false，则会暂停等待用户确认)
+design_csv = 'D:\ENVS\active-psych-sampling\data\i9csy65bljq14ovww2v91-6532622b_JBmIu2QSKA_mapped_normalized_zscore_v2.csv' # 设计空间CSV文件路径
+interaction_mode = "hybrid" # 交互设置保留给后续步骤与元信息
+interaction_pairs = [
+
+] # 预热阶段重点探索的交互对索引列表，例如 [[0, 1], [2, 3]] (深度优先)                                                
+merge = false # 是否合并为一个CSV文件
+n_subjects = 5 # 被试数量
+output_root = "output" # 整个工作流输出根目录；实际步骤目录固定为 output_root/timestamp/step1
+allocation_mode = "disjoint" # 分配模式: disjoint (默认每人不同) / shared (所有人同一套)
+shared_points = 0 # 所有被试共享的 LHS 点数，默认 0 表示纯覆盖
+lhs_oversample_factor = 5 # LHS 候选放大倍数，越大越容易映射到更分散的离散点
+repeat_one_point = false # 是否在被试内增加一个重复点
+random_seed = 42 # 随机种子
+trials_per_subject = 10 # 每个被试的测试次数
+
+[step1_5]
+# Step 1.5: Simulation Configuration
+# Main effect weights for 6 features (template defaults - adjust as needed)
+weights = [0.3, -0.2, 0.4, 0.15, -0.25, 0.2]
+
+individual_std_percent = 0.5 # 个体差异比例
+interaction_pairs = [[0, 1], [2, 3]] # 模拟中包含的交互对索引列表，例如 [[0, 1], [2, 3]]                 
+interaction_weight_mean = 0.4 # 交互项权重均值（所有交互对围绕此值波动）
+interaction_weight_std_ratio = 0.1 # 交互项权重标准差比例（std = mean * ratio，设为0则所有交互对权重相同）
+likert_levels = 7 # Likert量表等级数
+likert_mode = "tanh" # Likert模式: tanh (拟真), percentile (均匀)
+likert_sensitivity = 2.0 # Likert灵敏度
+noise_std = 0.02 # 响应噪声标准差 (0.1 约为信号强度的 40%)
+output_type = "likert" # 输出类型: continuous (连续), likert (李克特量表)
+population_mean = 0.5 # 群体权重均值
+population_std = 0.4 # 群体权重标准差
+response_col = "y" # 响应列名
+seed = 8341 # 随机种子
+
+[step2]
+# Step 2: Analysis & Specification Configuration
+max_pairs = 2 # 推荐的最大交互对数量 (柔性熔断阈值)
+min_pairs = 2 # 至少保留的交互对数量 (设为0允许算法判断无交互)
+response_col = "y" # 响应变量列名
+selection_method = "elbow" # 筛选方法: elbow (小样本推荐,用全部数据), stability (更保守), bic, top_k
+subject_col = "subject_id" # 被试编号列名
+suspected_pairs = [[0, 1], [2, 3]] # 用户怀疑的交互对 (强制保留)，例如 [[0, 1], [2, 3]]               
+# 注意: 在小预算下，交互自动检测仍然有限
+# 建议: 如果有先验知识，直接在 suspected_pairs 中指定交互对
+# 原理: LHS 先保证覆盖，再用 suspected_pairs 帮助 Phase 2 聚焦                                 
+
+[step3]
+# Step 3: Base GP Training Configuration
+ensure_diversity = true # 是否确保采样多样性
+learning_rate = 0.05 # 学习率
+max_iters = 300 # GP训练最大迭代次数
+response_col = "y" # 响应变量列名
+subject_col = "subject_id" # 被试编号列名
+use_cuda = false # 是否使用CUDA
+
+# --- 高级核函数配置 ---
+# 可选: 
+# 1. "default" (Matern 2.5 ARD, 稳健但分类处理较粗糙)
+# 2. "custom_anova" (ANOVA 分解, 适合捕捉特定交互, 但小样本易爆炸)
+# 3. "custom_basegp_residual_mixed" (专业混合核, 推荐用于 LMM 采样)
+kernel_type = "custom_anova"
+
+# 组合方式 (仅用于 custom_basegp_residual_mixed):
+# "mult": 乘法 (Matern * Categorical), 捕捉全交互, 严谨但敏感
+# "add": 加法 (Matern + Categorical), 仅主效应, 极稳健
+# "full": 混合 (Add + Mult), 兼顾主效应与交互
+kernel_combination = "add"
+
+# 交互模式 (仅用于 custom_anova):
+# "all" (全交互), "list" (指定交互对), "none" (仅主效应)
+interaction_mode = "none"
+
+# 维度规格 (仅在 kernel_type = "custom_anova" 时必须)
+# 注意：顺序必须与设计空间 CSV 中的列顺序一致
+dim_specs = [
+  {name = "x1_CeilingHeight", type = "continuous"},
+  {name = "x2_GridModule", type = "continuous"},
+  {name = "x3_OuterFurniture", type = "discrete", n_categories = 3},
+  {name = "x4_VisualBoundary", type = "discrete", n_categories = 3},
+  {name = "x5_PhysicalBoundary", type = "discrete", n_categories = 2},
+  {name = "x6_InnerFurniture", type = "discrete", n_categories = 3},
+]
+
+# 交互项收缩先验 (Interaction Shrinkage)
+interaction_initial_scale = 0.1
+interaction_shrink_loc = -2.0
+interaction_shrink_scale = 0.5

@@ -1,0 +1,12 @@
+# Step 1.5: Simulation Configuration
+seed = 42 # 随机种子
+population_mean = 0.0 # 群体权重均值
+population_std = 0.25 # 群体权重标准差
+individual_std_percent = 0.5 # 个体差异比例
+output_type = "likert" # 输出类型: continuous (连续), likert (李克特量表)
+likert_levels = 5 # Likert量表等级数
+likert_mode = "tanh" # Likert模式: tanh (拟真), percentile (均匀)
+likert_sensitivity = 2.0 # Likert灵敏度
+interaction_weight_mean = 0.25 # 交互项权重均值（所有交互对围绕此值波动）
+interaction_weight_std_ratio = 0.2 # 交互项权重标准差比例（std = mean * ratio，设为0则所有交互对权重相同）
+response_col = "y" # 响应列名

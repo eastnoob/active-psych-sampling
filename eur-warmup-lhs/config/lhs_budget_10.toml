@@ -1,0 +1,65 @@
+# EUR-Warmup LHS Recipe: 10 trials per subject
+# 用途：默认冷启动。保留 1 个共享点，其余预算用于全局覆盖。
+
+[step1]
+auto_confirm = false
+design_csv = 'D:\ENVS\active-psych-sampling\data\i9csy65bljq14ovww2v91-6532622b_JBmIu2QSKA_mapped_normalized_zscore_v2.csv'
+interaction_mode = "hybrid"
+interaction_pairs = [
+
+] # 如有明确怀疑的交互对，建议直接填写
+merge = false
+n_subjects = 5
+output_root = "output"
+allocation_mode = "disjoint"
+shared_points = 1
+lhs_oversample_factor = 5
+repeat_one_point = false
+random_seed = 42
+trials_per_subject = 10
+
+[step1_5]
+weights = [0.3, -0.2, 0.4, 0.15, -0.25, 0.2]
+individual_std_percent = 0.5
+interaction_pairs = []
+interaction_weight_mean = 0.4
+interaction_weight_std_ratio = 0.1
+likert_levels = 7
+likert_mode = "tanh"
+likert_sensitivity = 2.0
+noise_std = 0.02
+output_type = "likert"
+population_mean = 0.5
+population_std = 0.4
+response_col = "y"
+seed = 8341
+
+[step2]
+max_pairs = 2
+min_pairs = 0
+response_col = "y"
+selection_method = "elbow"
+subject_col = "subject_id"
+suspected_pairs = [] # 如果已知重点交互，建议直接填写
+
+[step3]
+ensure_diversity = true
+learning_rate = 0.05
+max_iters = 300
+response_col = "y"
+subject_col = "subject_id"
+use_cuda = false
+kernel_type = "custom_anova"
+kernel_combination = "add"
+interaction_mode = "none"
+dim_specs = [
+  {name = "x1_CeilingHeight", type = "continuous"},
+  {name = "x2_GridModule", type = "continuous"},
+  {name = "x3_OuterFurniture", type = "discrete", n_categories = 3},
+  {name = "x4_VisualBoundary", type = "discrete", n_categories = 3},
+  {name = "x5_PhysicalBoundary", type = "discrete", n_categories = 2},
+  {name = "x6_InnerFurniture", type = "discrete", n_categories = 3},
+]
+interaction_initial_scale = 0.1
+interaction_shrink_loc = -2.0
+interaction_shrink_scale = 0.5

@@ -1,0 +1,25 @@
+[workspace]
+authors = ["eastnoob <tianfengxu1997@outlook.com>"]
+channels = ["conda-forge", "pytorch"]
+name = "eur-warmup-lhs"
+platforms = ["win-64"]
+version = "0.1.0"
+
+[tasks]
+cli = {cmd = "python main.py", env = {PYTHONPATH = ".;..;core/internal"}}
+test = {cmd = "python tests/test_flow.py", env = {PYTHONPATH = ".;..;core/internal"}}
+
+[dependencies]
+botorch = ">=0.16.1,<0.17"
+click = ">=8.3.1,<9"
+gpytorch = ">=1.14.3,<2"
+loguru = ">=0.7.3,<0.8"
+numpy = ">=2.2.6,<3"
+pandas = ">=2.3.3,<3"
+pip = "*"
+pydoe3 = ">=1.6.1,<2"
+python = "3.10.*"
+pytorch = ">=2.9.1,<3"
+rich = ">=14.2.0,<15"
+scipy = ">=1.15.2,<2"
+toml = ">=0.10.2,<0.11"

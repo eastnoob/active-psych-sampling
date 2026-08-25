@@ -1,0 +1,6 @@
+# Step 2: Analysis Configuration
+subject_col = "subject_id" # 被试编号列名
+response_col = "y" # 响应变量列名
+max_pairs = 5 # 最多选择的交互对数量
+min_pairs = 2 # 最少选择的交互对数量
+selection_method = "elbow" # 交互对选择方法: elbow, bic_threshold, top_k

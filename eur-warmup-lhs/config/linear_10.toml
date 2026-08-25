@@ -1,0 +1,94 @@
+# EUR-Warmup Full Workflow Configuration
+# 这是一个完整的全流程配置文件，你可以手动修改后在 CLI 中选择使用。
+
+[step1]
+# Step 1: Warmup Sampling Configuration
+auto_confirm = false # 是否自动确认预算评估 (如果为 false，则会暂停等待用户确认)
+core2a_method = "oa" # 主效应采样方法: "d-optimal" (信息量最大化), "stratified" (均匀覆盖) 或 "oa" (正交/均衡)
+design_csv = 'D:/ENVS/active-psych-sampling/data/source_data_normalized_minus1to1.csv' # 设计空间CSV文件路径
+interaction_mode = "hybrid" # 交互模式: free (自由探索), specified_only (仅指定), hybrid (混合)
+interaction_pairs = [
+  [0, 2],
+  [1, 4],
+] # 预热阶段重点探索的交互对索引列表，例如 [[0, 1], [2, 3]] (深度优先)                                                                                 
+main_effects_first = false 
+merge = false # 是否合并为一个CSV文件
+n_subjects = 5 # 被试数量
+output_dir = "sample" # 输出目录名称
+skip_interaction = false # 是否跳过交互效应探索
+trials_per_subject = 20 # 每个被试的测试次数
+
+[step1_5]
+# Step 1.5: Simulation Configuration
+# Main effect weights for 6 features (must match dim_specs order)
+weights = [0.14901424590336979, -0.0414792903513554, 0.19430656143020775, 0.45690895692240757, -0.07024601241700079, -0.07024108708475416]
+
+individual_std_percent = 0.15
+interaction_pairs = [[0, 2], [1, 4]]
+likert_levels = 7
+likert_mode = "tanh"
+likert_sensitivity = 1.5
+noise_std = 0.1
+output_type = "likert"
+population_mean = 0.0
+population_std = 0.3
+response_col = "y"
+seed = 42
+
+[step1_5.interaction_weights]
+"0,2" = 0.5
+"1,4" = -0.4
+
+[step2]
+# Step 2: Analysis & Specification Configuration
+max_pairs = 4 # 推荐的最大交互对数量 (允许保护项 + Lasso 发现项)
+min_pairs = 2 # 至少保留的交互对数量 (对应 suspected_pairs 数量)
+response_col = "y" # 响应变量列名
+selection_method = "elbow" # 筛选方法: elbow (小样本推荐,用全部数据), stability (更保守), bic, top_k
+subject_col = "subject_id" # 被试编号列名
+suspected_pairs = [[0, 2], [1, 4]] # 用户怀疑的交互对 (强制保护，不参与 Lasso 淘汰)                                  
+# 注意: 在20次/人的预算下(~22个样本用于交互探索)，自动检测准确率有限
+# 建议: 如果有先验知识，直接在 suspected_pairs 中指定交互对
+# 原理: elbow使用全部数据,覆盖度优于stability的子采样;但可能有误报,需结合suspected_pairs验证                                 
+
+[step3]
+# Step 3: Base GP Training Configuration
+ensure_diversity = true # 是否确保采样多样性
+learning_rate = 0.05 # 学习率
+max_iters = 800 # GP训练最大迭代次数
+response_col = "y" # 响应变量列名
+subject_col = "subject_id" # 被试编号列名
+use_cuda = false # 是否使用CUDA
+
+# --- 高级核函数配置 ---
+# 已切换为 custom_anova 以实现效应隔离，保护主效应估计
+kernel_type = "custom_anova"
+y_normalization_type = "zscore"
+
+# 组合方式 (仅用于 custom_basegp_residual_mixed):
+# "mult": 乘法 (Matern * Categorical), 捕捉全交互, 严谨但敏感
+# "add": 加法 (Matern + Categorical), 仅主效应, 极稳健
+# "full": 混合 (Add + Mult), 兼顾主效应与交互
+kernel_combination = "full"
+
+# 交互模式 (仅用于 custom_anova):
+# "none" 表示不使用交互项，仅建模主效应
+interaction_mode = "list" # 仅对指定的交互项进行先验学习
+interaction_pairs = [[0, 2], [1, 4]] 
+
+# 维度规格 (仅在 kernel_type = "custom_anova" 时必须)
+# 注意：顺序必须与设计空间 CSV 中的列顺序一致
+dim_specs = [
+  {name = "x1_CeilingHeight", type = "continuous"},
+  {name = "x2_GridModule", type = "continuous"},
+  {name = "x3_OuterFurniture", type = "discrete", n_categories = 3},
+  {name = "x4_VisualBoundary", type = "discrete", n_categories = 3},
+  {name = "x5_PhysicalBoundary", type = "discrete", n_categories = 2},
+  {name = "x6_InnerFurniture", type = "discrete", n_categories = 3},
+]
+
+# 交互项收缩先验 (Interaction Shrinkage) - 适度收缩，平衡主效应与交互项
+interaction_initial_scale = 0.1
+interaction_shrink_loc = -1.5
+interaction_shrink_scale = 0.5
+# use_global_kernel = true # 是否使用全局核函数 (跨被试共享超参数)

@@ -1,0 +1,28 @@
+# Step 3: Base GP Configuration
+max_iters = 100 # GP训练最大迭代次数
+learning_rate = 0.05 # 学习率
+use_cuda = false # 是否使用CUDA
+ensure_diversity = true # 是否确保采样多样性
+subject_col = "subject_id" # 被试编号列名
+response_col = "y" # 响应变量列名
+
+# --- 高级核函数配置 (ANOVA 分解) ---
+# 可选: "default" (Matern), "custom_anova"
+kernel_type = "default" 
+
+# 交互模式: "all" (全交互), "list" (指定交互对), "none" (仅主效应)
+interaction_mode = "all"
+
+# 维度规格 (仅在 kernel_type = "custom_anova" 时必须)
+# 格式: { name = "列名", type = "continuous" 或 "discrete", n_categories = 类别数(仅离散) }
+# 注意：顺序必须与设计空间 CSV 中的列顺序一致
+dim_specs = [
+    { name = "x1", type = "continuous" },
+    { name = "x2", type = "continuous" },
+    { name = "cat1", type = "discrete", n_categories = 2 }
+]
+
+# 交互项收缩先验 (Interaction Shrinkage)
+interaction_shrink_loc = -2.0
+interaction_shrink_scale = 0.5
+interaction_initial_scale = 0.1

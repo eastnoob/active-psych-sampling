@@ -1,0 +1,22 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+env/
+.env
+.pytest_cache/
+logs/
+sample/
+result/
+analysis_output/
+base_gp_output/
+config/temp_config.toml
+.DS_Store
+output/
+test_output_dir/
+data/test_design.csv
+# pixi environments
+.pixi/*
+!.pixi/config.toml
